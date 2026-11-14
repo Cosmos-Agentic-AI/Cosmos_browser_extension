@@ -71,6 +71,54 @@ export async function chatComplete(
 }
 
 /**
+ * Generates a text embedding vector. Returns null on any failure (unsupported
+ * provider, network error, quota) so callers can degrade gracefully to
+ * keyword-overlap retrieval.
+ *
+ * Uses the same provider selection as chatComplete, excluding Groq which
+ * doesn't offer an /embeddings endpoint.
+ */
+export async function embed(settings: CosmosSettings, text: string): Promise<number[] | null> {
+  const providerId: ProviderId = settings.providers.omniroute.apiKey
+    ? "omniroute"
+    : settings.providers.openrouter.apiKey
+      ? "openrouter"
+      : null!;
+
+  if (!providerId) return null; // Groq-only setup: no embedding endpoint
+
+  const provider = settings.providers[providerId];
+  try {
+    const res = await fetch(`${provider.baseUrl}/embeddings`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(provider.apiKey ? { Authorization: `Bearer ${provider.apiKey}` } : {}),
+      },
+      body: JSON.stringify({ model: "text-embedding-3-small", input: text.slice(0, 2000) }),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { data: Array<{ embedding: number[] }> };
+    return data.data[0]?.embedding ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Cosine similarity between two equal-length vectors, clamped to [0, 1]. */
+export function cosineSimilarity(a: number[], b: number[]): number {
+  let dot = 0, na = 0, nb = 0;
+  for (let i = 0; i < a.length; i++) {
+    const ai = a[i] ?? 0, bi = b[i] ?? 0;
+    dot += ai * bi;
+    na += ai * ai;
+    nb += bi * bi;
+  }
+  if (na === 0 || nb === 0) return 0;
+  return Math.max(0, Math.min(1, dot / (Math.sqrt(na) * Math.sqrt(nb))));
+}
+
+/**
  * Streaming call — used by the chat orchestrator for the assistant's
  * narration. Parses standard OpenAI-style SSE ("data: {json}\n\n" lines,
  * terminated by "data: [DONE]").

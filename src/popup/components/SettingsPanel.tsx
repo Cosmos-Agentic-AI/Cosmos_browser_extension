@@ -3,6 +3,17 @@ import { CosmosSettings, ProviderId } from "@shared/types/settings";
 import { MemoryExportBundle } from "@shared/types/memory";
 import { sendToRouter } from "@shared/utils/sendToRouter";
 
+function applyTheme(theme: CosmosSettings["theme"]) {
+  const root = document.documentElement;
+  if (theme === "light") root.setAttribute("data-theme", "light");
+  else if (theme === "system") {
+    if (window.matchMedia("(prefers-color-scheme: dark)").matches) root.removeAttribute("data-theme");
+    else root.setAttribute("data-theme", "light");
+  } else {
+    root.removeAttribute("data-theme");
+  }
+}
+
 const PROVIDER_IDS: ProviderId[] = ["omniroute", "openrouter", "groq"];
 
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
@@ -43,6 +54,29 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     const updated = await sendToRouter<{ model: string }, CosmosSettings>(
       "SETTINGS_UPDATE_MODEL",
       { model },
+      "popup",
+    );
+    setSettings(updated);
+  };
+
+  const saveTheme = async (theme: CosmosSettings["theme"]) => {
+    const updated = await sendToRouter<{ theme: CosmosSettings["theme"] }, CosmosSettings>(
+      "SETTINGS_UPDATE_THEME",
+      { theme },
+      "popup",
+    );
+    setSettings(updated);
+    applyTheme(theme);
+  };
+
+  const saveBlockedDomains = async (raw: string) => {
+    const blockedDomains = raw
+      .split(/[\n,]+/)
+      .map((d) => d.trim().toLowerCase())
+      .filter((d) => d.length > 0);
+    const updated = await sendToRouter<{ blockedDomains: string[] }, CosmosSettings>(
+      "SETTINGS_UPDATE_BLOCKED_DOMAINS",
+      { blockedDomains },
       "popup",
     );
     setSettings(updated);
@@ -137,6 +171,40 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           placeholder="e.g. auto, gpt-4o-mini, llama-3.3-70b"
           className="w-full rounded border border-cosmos-border bg-cosmos-surface px-2 py-1.5 text-xs outline-none focus:border-cosmos-accent"
         />
+      </div>
+
+      <div className="mb-5">
+        <div className="mb-2 text-xs uppercase tracking-wide text-cosmos-textMuted">Theme</div>
+        <div className="flex gap-2">
+          {(["dark", "light", "system"] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => saveTheme(t)}
+              className={`rounded-md border px-3 py-1.5 text-xs capitalize transition-colors ${
+                settings.theme === t
+                  ? "border-cosmos-accent text-cosmos-accent"
+                  : "border-cosmos-border text-cosmos-textMuted hover:border-cosmos-accent hover:text-cosmos-text"
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mb-5">
+        <div className="mb-2 text-xs uppercase tracking-wide text-cosmos-textMuted">Blocked domains</div>
+        <textarea
+          key={settings.blockedDomains.join(",")}
+          defaultValue={settings.blockedDomains.join("\n")}
+          onBlur={(e) => saveBlockedDomains(e.target.value)}
+          rows={3}
+          placeholder={"example.com\nbank.example.org"}
+          className="w-full resize-none rounded border border-cosmos-border bg-cosmos-surface px-2 py-1.5 font-mono text-xs outline-none focus:border-cosmos-accent"
+        />
+        <p className="mt-1 text-xs text-cosmos-textMuted">
+          Cosmos will refuse to act on these domains. One per line or comma-separated.
+        </p>
       </div>
 
       <div className="mb-2">

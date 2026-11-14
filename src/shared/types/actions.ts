@@ -13,6 +13,12 @@ export const ActionTypeSchema = z.enum([
   "upload_file",
   "wait_for_download",
   "ask_user_confirmation",
+  // Data extraction: asks the LLM to pull structured JSON from the page.
+  // action.value = natural-language description of what to extract.
+  "extract",
+  // Guard condition: verifies a natural-language assertion is true before continuing.
+  // action.value = the condition to check. Fails the step if false.
+  "assert",
 ]);
 export type ActionType = z.infer<typeof ActionTypeSchema>;
 

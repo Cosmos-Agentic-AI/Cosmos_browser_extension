@@ -31,7 +31,9 @@ Rules:
       "order": number,
       "description": string,
       "action": {
-        "type": "click"|"type"|"scroll"|"select_option"|"read_dom"|"switch_tab"|"open_tab"|"close_tab"|"navigate"|"upload_file"|"wait_for_download"|"ask_user_confirmation",
+        "type": "click"|"type"|"scroll"|"select_option"|"read_dom"|"switch_tab"|"open_tab"|"close_tab"|"navigate"|"upload_file"|"wait_for_download"|"ask_user_confirmation"|"extract"|"assert",
+        // extract: value = natural-language description of data to pull (returns JSON in chat)
+        // assert: value = condition to verify before proceeding (fails step if false)
         "targetId": string (optional),
         "value": string (optional),
         "tabId": number (optional)

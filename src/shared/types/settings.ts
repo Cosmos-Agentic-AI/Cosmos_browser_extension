@@ -21,6 +21,8 @@ export interface CosmosSettings {
   defaultModel: string | null;
   theme: "dark" | "light" | "system";
   onboardingComplete: boolean;
+  /** Domains Cosmos must never act on (checked before each task). */
+  blockedDomains: string[];
 }
 
 export const DEFAULT_PROVIDERS: Record<ProviderId, ProviderConfig> = {
@@ -55,4 +57,5 @@ export const DEFAULT_SETTINGS: CosmosSettings = {
   defaultModel: null,
   theme: "dark",
   onboardingComplete: false,
+  blockedDomains: [],
 };

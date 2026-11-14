@@ -8,6 +8,8 @@ import {
   WebsiteMemory,
   WorkflowMemory,
 } from "@shared/types/memory";
+import { CosmosSettings } from "@shared/types/settings";
+import { cosineSimilarity, embed } from "@modules/api-manager/llmClient";
 
 function now() {
   return Date.now();
@@ -17,14 +19,21 @@ function normalizeSignature(text: string): string {
   return text.trim().toLowerCase().replace(/\s+/g, " ").slice(0, 200);
 }
 
+/** Strip obvious secrets from memory text before persisting. */
+function redact(text: string): string {
+  return text
+    .replace(/\b(password|passwd|secret|token|api[_-]?key|access[_-]?key)\s*[=:]\s*\S+/gi, "$1=[REDACTED]")
+    .replace(/\b\d{4}[\s-]\d{4}[\s-]\d{4}[\s-]\d{4}\b/g, "[CARD-REDACTED]");
+}
+
+const SIMILARITY_THRESHOLD = 0.75;
+
 /**
  * Memory Engine
  * --------------
- * The Router is the only caller. Retrieval methods here are intentionally
- * simple (exact domain match, keyword overlap) rather than embeddings-based
- * — there's no vector store in this environment. That's a reasonable
- * upgrade path later; the interface is designed so swapping the retrieval
- * strategy wouldn't change callers.
+ * Retrieval uses embeddings when available (requires a provider that supports
+ * /v1/embeddings, e.g. OmniRoute or OpenRouter). Falls back to exact-match
+ * + keyword overlap when embeddings are unavailable or the API errors.
  */
 export class MemoryService {
   // ---------- Session ----------
@@ -118,9 +127,18 @@ export class MemoryService {
 
   // ---------- Workflow Memory ----------
 
-  async saveWorkflow(workflow: Omit<WorkflowMemory, "id" | "updatedAt">): Promise<WorkflowMemory> {
+  async saveWorkflow(
+    workflow: Omit<WorkflowMemory, "id" | "updatedAt">,
+    settings?: CosmosSettings,
+  ): Promise<WorkflowMemory> {
     const id = `${workflow.domain ?? "general"}:${normalizeSignature(workflow.name)}`;
-    const record: WorkflowMemory = { ...workflow, id, updatedAt: now() };
+    const embedding = settings ? await embed(settings, workflow.name).catch(() => null) : undefined;
+    const record: WorkflowMemory = {
+      ...workflow,
+      id,
+      updatedAt: now(),
+      ...(embedding ? { embedding } : {}),
+    };
     await cosmosDB.workflowMemory.put(record);
     if (workflow.domain) {
       const site = await this.upsertWebsiteMemory(workflow.domain, {});
@@ -133,9 +151,35 @@ export class MemoryService {
     return record;
   }
 
-  async findWorkflow(name: string, domain: string | null): Promise<WorkflowMemory | null> {
+  async findWorkflow(
+    name: string,
+    domain: string | null,
+    settings?: CosmosSettings,
+  ): Promise<WorkflowMemory | null> {
+    // Exact-match first (always fast).
     const id = `${domain ?? "general"}:${normalizeSignature(name)}`;
-    return (await cosmosDB.workflowMemory.get(id)) ?? null;
+    const exact = await cosmosDB.workflowMemory.get(id);
+    if (exact) return exact;
+
+    // Semantic search when embeddings are available.
+    if (settings) {
+      const queryVec = await embed(settings, name).catch(() => null);
+      if (queryVec) {
+        const candidates = domain
+          ? await cosmosDB.workflowMemory.where("domain").equals(domain).toArray()
+          : await cosmosDB.workflowMemory.toArray();
+        let best: WorkflowMemory | null = null;
+        let bestScore = 0;
+        for (const c of candidates) {
+          if (!c.embedding) continue;
+          const score = cosineSimilarity(queryVec, c.embedding);
+          if (score > bestScore) { bestScore = score; best = c; }
+        }
+        if (bestScore >= SIMILARITY_THRESHOLD) return best;
+      }
+    }
+
+    return null;
   }
 
   async listWorkflows(domain?: string): Promise<WorkflowMemory[]> {
@@ -157,53 +201,76 @@ export class MemoryService {
 
   // ---------- Failure Memory ----------
 
-  async recordFailure(input: {
-    domain: string | null;
-    taskSignature: string;
-    cause: string;
-    recoveryStrategy?: string | null;
-    confidence?: number;
-  }): Promise<FailureMemory> {
-    const signature = normalizeSignature(input.taskSignature);
+  async recordFailure(
+    input: {
+      domain: string | null;
+      taskSignature: string;
+      cause: string;
+      recoveryStrategy?: string | null;
+      confidence?: number;
+    },
+    settings?: CosmosSettings,
+  ): Promise<FailureMemory> {
+    const signature = normalizeSignature(redact(input.taskSignature));
     const id = `${input.domain ?? "general"}:${signature}`;
     const existing = await cosmosDB.failureMemory.get(id);
+    const embedding = settings ? await embed(settings, signature).catch(() => null) : undefined;
 
     const record: FailureMemory = {
       id,
       domain: input.domain,
       taskSignature: signature,
-      cause: input.cause,
-      recoveryStrategy: input.recoveryStrategy ?? existing?.recoveryStrategy ?? null,
+      cause: redact(input.cause),
+      recoveryStrategy: input.recoveryStrategy ? redact(input.recoveryStrategy) : (existing?.recoveryStrategy ?? null),
       confidence: input.confidence ?? existing?.confidence ?? 0,
       occurrences: (existing?.occurrences ?? 0) + 1,
       lastOccurredAt: now(),
+      ...(embedding ? { embedding } : existing?.embedding ? { embedding: existing.embedding } : {}),
     };
     await cosmosDB.failureMemory.put(record);
     return record;
   }
 
   /** Looks up a previously successful recovery strategy for a similar failure. */
-  async findRecoveryStrategy(domain: string | null, taskSignature: string): Promise<FailureMemory | null> {
+  async findRecoveryStrategy(
+    domain: string | null,
+    taskSignature: string,
+    settings?: CosmosSettings,
+  ): Promise<FailureMemory | null> {
     const signature = normalizeSignature(taskSignature);
     const id = `${domain ?? "general"}:${signature}`;
     const exact = await cosmosDB.failureMemory.get(id);
     if (exact?.recoveryStrategy) return exact;
 
-    // Fallback: keyword overlap against known failures for this domain.
+    // Semantic search when embeddings are available.
+    if (settings) {
+      const queryVec = await embed(settings, signature).catch(() => null);
+      if (queryVec) {
+        const candidates = domain
+          ? await cosmosDB.failureMemory.where("domain").equals(domain).toArray()
+          : await cosmosDB.failureMemory.toArray();
+        let best: FailureMemory | null = null;
+        let bestScore = 0;
+        for (const c of candidates) {
+          if (!c.recoveryStrategy || !c.embedding) continue;
+          const score = cosineSimilarity(queryVec, c.embedding);
+          if (score > bestScore) { bestScore = score; best = c; }
+        }
+        if (bestScore >= SIMILARITY_THRESHOLD) return best;
+      }
+    }
+
+    // Fallback: keyword overlap.
     const candidates = domain
       ? await cosmosDB.failureMemory.where("domain").equals(domain).toArray()
       : await cosmosDB.failureMemory.toArray();
-
     const words = new Set(signature.split(" ").filter((w) => w.length > 3));
     let best: FailureMemory | null = null;
     let bestScore = 0;
     for (const c of candidates) {
       if (!c.recoveryStrategy) continue;
       const overlap = c.taskSignature.split(" ").filter((w) => words.has(w)).length;
-      if (overlap > bestScore) {
-        bestScore = overlap;
-        best = c;
-      }
+      if (overlap > bestScore) { bestScore = overlap; best = c; }
     }
     return bestScore >= 2 ? best : null;
   }

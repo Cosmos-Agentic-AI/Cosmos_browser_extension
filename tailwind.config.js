@@ -5,15 +5,15 @@ export default {
     extend: {
       colors: {
         cosmos: {
-          bg: "#0b0d12",
-          surface: "#12141c",
-          border: "#232637",
-          accent: "#7c5cff",
-          accentMuted: "#5b46b8",
-          text: "#e6e7ee",
-          textMuted: "#8a8da3",
-          danger: "#ef4444",
-          success: "#22c55e",
+          bg: "var(--cosmos-bg)",
+          surface: "var(--cosmos-surface)",
+          border: "var(--cosmos-border)",
+          accent: "var(--cosmos-accent)",
+          accentMuted: "var(--cosmos-accent-muted)",
+          text: "var(--cosmos-text)",
+          textMuted: "var(--cosmos-text-muted)",
+          danger: "var(--cosmos-danger)",
+          success: "var(--cosmos-success)",
         },
       },
       fontFamily: {

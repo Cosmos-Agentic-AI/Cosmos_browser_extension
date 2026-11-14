@@ -44,6 +44,21 @@ export async function runTask(
     const snapshot = await readPageSnapshot(tabId);
     const domain = domainOf(snapshot.url);
 
+    // Enforce domain blocklist before doing any work.
+    if (domain && settings.blockedDomains.length > 0) {
+      const blocked = settings.blockedDomains.some(
+        (d) => domain === d || domain.endsWith(`.${d}`),
+      );
+      if (blocked) {
+        emit({
+          kind: "error",
+          message: `Cosmos is configured not to act on ${domain}. Remove it from Blocked Domains in Settings to proceed.`,
+        });
+        await memoryService.updateSession(sessionId, { executionState: "idle" });
+        return;
+      }
+    }
+
     if (shouldUseVision(snapshot)) {
       emit({
         kind: "memory_insight",
@@ -52,9 +67,9 @@ export async function runTask(
     }
 
     const websiteMemory = domain ? await memoryService.getWebsiteMemory(domain) : null;
-    const matchingWorkflow = domain ? await memoryService.findWorkflow(goal, domain) : null;
+    const matchingWorkflow = domain ? await memoryService.findWorkflow(goal, domain, settings) : null;
     const relevantFailures = domain
-      ? [await memoryService.findRecoveryStrategy(domain, goal)].filter(
+      ? [await memoryService.findRecoveryStrategy(domain, goal, settings)].filter(
           (f): f is NonNullable<typeof f> => f !== null,
         )
       : [];
@@ -105,7 +120,7 @@ export async function runTask(
       timeline = updateTimeline(timeline, step.id, "running");
       emit({ kind: "timeline", timeline });
 
-      let result = await executeStep(step, tabId);
+      let result = await executeStep(step, tabId, settings);
       let stepToRun: PlanStep = step;
 
       // Retry loop with escalation to the specialist agent on repeated failure.
@@ -114,7 +129,7 @@ export async function runTask(
         failureCounts.set(step.id, attempts);
 
         if (attempts.length < MAX_RETRIES_BEFORE_SPECIALIST) {
-          result = await executeStep(stepToRun, tabId);
+          result = await executeStep(stepToRun, tabId, settings);
           continue;
         }
 
@@ -141,7 +156,7 @@ export async function runTask(
         }
 
         stepToRun = { ...step, action: { ...step.action, ...outcome.revisedAction } };
-        result = await executeStep(stepToRun, tabId);
+        result = await executeStep(stepToRun, tabId, settings);
 
         if (!result.ok) {
           // Specialist's fix didn't work either — stop retrying this step.
@@ -159,7 +174,7 @@ export async function runTask(
           domain,
           taskSignature: step.description,
           cause: result.error ?? "unknown error",
-        });
+        }, settings);
         break; // stop the plan; don't cascade failures downstream
       }
 
@@ -183,7 +198,7 @@ export async function runTask(
         timesUsed: 1,
         successCount: 1,
         failureCount: 0,
-      });
+      }, settings);
     }
 
     await memoryService.updateSession(sessionId, {

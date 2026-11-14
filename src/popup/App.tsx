@@ -8,13 +8,29 @@ import { ChatInput } from "./components/ChatInput";
 import { MemoryInsights } from "./components/MemoryInsights";
 import { SettingsPanel } from "./components/SettingsPanel";
 
+function applyTheme(theme: CosmosSettings["theme"]) {
+  const root = document.documentElement;
+  if (theme === "light") {
+    root.setAttribute("data-theme", "light");
+  } else if (theme === "system") {
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    if (prefersDark) root.removeAttribute("data-theme");
+    else root.setAttribute("data-theme", "light");
+  } else {
+    root.removeAttribute("data-theme"); // dark is default via CSS :root
+  }
+}
+
 export function App() {
   const [settings, setSettings] = useState<CosmosSettings | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [activeTabId, setActiveTabId] = useState<number | null>(null);
 
   useEffect(() => {
-    sendToRouter<undefined, CosmosSettings>("SETTINGS_GET_KEYS", undefined, "popup").then(setSettings);
+    sendToRouter<undefined, CosmosSettings>("SETTINGS_GET_KEYS", undefined, "popup").then((s) => {
+      setSettings(s);
+      applyTheme(s.theme);
+    });
     chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
       if (tab?.id !== undefined) setActiveTabId(tab.id);
     });

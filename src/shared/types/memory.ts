@@ -67,6 +67,8 @@ export interface WorkflowMemory {
   successCount: number;
   failureCount: number;
   updatedAt: number;
+  /** Semantic embedding of `name` for cosine-similarity retrieval. */
+  embedding?: number[];
 }
 
 export interface FailureMemory {
@@ -78,6 +80,8 @@ export interface FailureMemory {
   confidence: number; // 0-1, how reliable the recovery strategy has proven
   occurrences: number;
   lastOccurredAt: number;
+  /** Semantic embedding of `taskSignature` for cosine-similarity retrieval. */
+  embedding?: number[];
 }
 
 export interface MemoryExportBundle {

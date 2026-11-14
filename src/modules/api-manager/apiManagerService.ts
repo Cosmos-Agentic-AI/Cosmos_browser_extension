@@ -57,6 +57,16 @@ export class ApiManagerService {
     return this.persist({ ...settings, defaultModel: model });
   }
 
+  async updateTheme(theme: CosmosSettings["theme"]): Promise<CosmosSettings> {
+    const settings = await this.getSettings();
+    return this.persist({ ...settings, theme });
+  }
+
+  async updateBlockedDomains(blockedDomains: string[]): Promise<CosmosSettings> {
+    const settings = await this.getSettings();
+    return this.persist({ ...settings, blockedDomains });
+  }
+
   async completeOnboarding(): Promise<CosmosSettings> {
     const settings = await this.getSettings();
     return this.persist({ ...settings, onboardingComplete: true });

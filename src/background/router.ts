@@ -1,7 +1,7 @@
 import { CosmosMessage } from "@shared/types/messages";
 import { apiManagerService } from "@modules/api-manager/apiManagerService";
 import { memoryService } from "@modules/memory/memoryService";
-import { ProviderId } from "@shared/types/settings";
+import { CosmosSettings, ProviderId } from "@shared/types/settings";
 import { MemoryExportBundle } from "@shared/types/memory";
 
 /**
@@ -48,6 +48,16 @@ export async function routeMessage(
     case "SETTINGS_UPDATE_BASE_URL": {
       const { providerId, baseUrl } = message.payload as { providerId: ProviderId; baseUrl: string };
       return apiManagerService.updateProviderBaseUrl(providerId, baseUrl);
+    }
+
+    case "SETTINGS_UPDATE_THEME": {
+      const { theme } = message.payload as { theme: CosmosSettings["theme"] };
+      return apiManagerService.updateTheme(theme);
+    }
+
+    case "SETTINGS_UPDATE_BLOCKED_DOMAINS": {
+      const { blockedDomains } = message.payload as { blockedDomains: string[] };
+      return apiManagerService.updateBlockedDomains(blockedDomains);
     }
 
     case "MEMORY_LIST_WORKFLOWS": {
