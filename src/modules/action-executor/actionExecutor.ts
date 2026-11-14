@@ -14,14 +14,30 @@ async function sendToContentScript<T>(
   tabId: number,
   message: { kind: "DOM_READ" | "EXECUTE_ACTION" | "WAIT_FOR_SETTLE" | "DOM_FINGERPRINT"; action?: BrowserAction; timeoutMs?: number },
 ): Promise<T> {
-  const response = (await chrome.tabs.sendMessage(tabId, message)) as ContentResponse<T> | undefined;
-  if (!response?.ok) {
-    throw new Error(
-      response?.error ??
-        "No response from content script — the page may not have loaded, or is a restricted chrome:// page.",
-    );
+  const send = async () => {
+    const response = (await chrome.tabs.sendMessage(tabId, message)) as ContentResponse<T> | undefined;
+    if (!response?.ok) {
+      throw new Error(
+        response?.error ??
+          "No response from content script — the page may not have loaded, or is a restricted chrome:// page.",
+      );
+    }
+    return response.data as T;
+  };
+
+  try {
+    return await send();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // Content script not present (tab was open before extension install/reload).
+    // Inject it dynamically and retry once.
+    if (msg.includes("Could not establish connection") || msg.includes("Receiving end does not exist")) {
+      await chrome.scripting.executeScript({ target: { tabId }, files: ["content/index.js"] });
+      await new Promise<void>((resolve) => setTimeout(resolve, 150));
+      return send();
+    }
+    throw err;
   }
-  return response.data as T;
 }
 
 /** Returns the page's current state fingerprint (url + visible text + input values). */

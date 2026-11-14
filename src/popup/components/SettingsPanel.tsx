@@ -55,10 +55,20 @@ function FieldInput({ className = "", ...props }: React.InputHTMLAttributes<HTML
   );
 }
 
+const SKIP_MODEL_KEYWORDS = ["whisper", "guard", "prompt-guard", "orpheus", "allam", "safeguard"];
+const TOP_MODELS = ["openai/gpt-oss-120b", "meta-llama/llama-3.3-70b-versatile", "anthropic/claude-sonnet-4-5", "google/gemini-flash-1.5"];
+
+function isChatModel(id: string) {
+  return !SKIP_MODEL_KEYWORDS.some((k) => id.toLowerCase().includes(k));
+}
+
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const [settings, setSettings] = useState<CosmosSettings | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [fetchingModels, setFetchingModels] = useState(false);
+  const [showModelPicker, setShowModelPicker] = useState(false);
 
   useEffect(() => {
     sendToRouter<undefined, CosmosSettings>("SETTINGS_GET_KEYS", undefined, "popup").then(setSettings);
@@ -185,6 +195,35 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     }
   };
 
+  const fetchModels = async () => {
+    if (!settings) return;
+    setFetchingModels(true);
+    setAvailableModels([]);
+    const found: string[] = [];
+    for (const id of PROVIDER_IDS) {
+      const p = settings.providers[id];
+      if (!p.apiKey) continue;
+      try {
+        const res = await fetch(`${p.baseUrl}/models`, {
+          headers: { Authorization: `Bearer ${p.apiKey}` },
+        });
+        if (res.ok) {
+          const data = (await res.json()) as { data?: { id: string }[] };
+          (data.data ?? []).filter((m) => isChatModel(m.id)).forEach((m) => found.push(m.id));
+        }
+      } catch { /* provider offline or key invalid */ }
+    }
+    const sorted = [...new Set(found)].sort((a, b) => {
+      const aTop = TOP_MODELS.includes(a) ? -1 : 0;
+      const bTop = TOP_MODELS.includes(b) ? -1 : 0;
+      return aTop - bTop || a.localeCompare(b);
+    });
+    setAvailableModels(sorted);
+    setShowModelPicker(sorted.length > 0);
+    setFetchingModels(false);
+    if (sorted.length === 0) flash("No models found — check your API keys.", false);
+  };
+
   const BEHAVIOURS = [
     {
       key: "dryRun" as const,
@@ -275,17 +314,68 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
         <section>
           <SectionLabel>Model</SectionLabel>
           <div className="rounded-2xl border border-cosmos-border bg-cosmos-surface p-4 space-y-2.5">
-            <div className="flex items-center gap-2 mb-1">
-              <IconSparkle size={12} className="text-cosmos-accent" />
-              <span className="text-xs font-medium text-cosmos-text">Default model</span>
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <IconSparkle size={12} className="text-cosmos-accent" />
+                <span className="text-xs font-medium text-cosmos-text">Default model</span>
+              </div>
+              <button
+                onClick={fetchModels}
+                disabled={fetchingModels}
+                className="flex items-center gap-1 rounded-lg border border-cosmos-border px-2 py-1 text-2xs text-cosmos-textMuted hover:border-cosmos-accent hover:text-cosmos-accent transition-colors disabled:opacity-40"
+              >
+                {fetchingModels ? (
+                  <span className="h-2.5 w-2.5 rounded-full border border-cosmos-accent border-t-transparent animate-spin inline-block" />
+                ) : (
+                  <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
+                    <path d="M1 4.5A3.5 3.5 0 108 4.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+                    <path d="M6.5 2.5L8 4.5l1.5-2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+                Fetch models
+              </button>
             </div>
             <FieldInput
+              key={settings.defaultModel ?? ""}
               defaultValue={settings.defaultModel ?? ""}
               onBlur={(e) => saveModel(e.target.value)}
-              placeholder="e.g. auto, gpt-4o-mini, llama-3.3-70b"
+              placeholder="e.g. openai/gpt-oss-120b, llama-3.3-70b-versatile"
             />
+            {showModelPicker && availableModels.length > 0 && (
+              <div className="rounded-xl border border-cosmos-border bg-cosmos-surface2 overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-1.5 border-b border-cosmos-border">
+                  <span className="text-2xs text-cosmos-textMuted">{availableModels.length} models available</span>
+                  <button onClick={() => setShowModelPicker(false)} className="text-cosmos-textMuted hover:text-cosmos-text transition-colors">
+                    <IconX size={9} />
+                  </button>
+                </div>
+                <div className="max-h-44 overflow-y-auto">
+                  {availableModels.map((m) => {
+                    const isActive = settings.defaultModel === m;
+                    const isBest = TOP_MODELS.includes(m);
+                    return (
+                      <button
+                        key={m}
+                        onClick={() => { saveModel(m); setShowModelPicker(false); }}
+                        className={`w-full flex items-center justify-between px-3 py-2 text-left text-xs hover:bg-cosmos-surface transition-colors ${
+                          isActive ? "text-cosmos-accent bg-cosmos-accentDim" : "text-cosmos-text"
+                        }`}
+                      >
+                        <span className="truncate font-mono">{m}</span>
+                        <div className="flex items-center gap-1 ml-2 shrink-0">
+                          {isBest && (
+                            <span className="rounded px-1 py-0.5 text-2xs gradient-bg text-white font-medium">best</span>
+                          )}
+                          {isActive && <IconCheck size={9} className="text-cosmos-accent" />}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <p className="text-2xs text-cosmos-textSubtle leading-relaxed">
-              Controls which model is used for planning and acting. Leave empty to auto-select the fastest available.
+              Click "Fetch models" to load available models from your configured providers.
             </p>
           </div>
         </section>

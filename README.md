@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5-blue.svg)](https://www.typescriptlang.org/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-<!-- Demo GIF — replace this comment with: ![Cosmos demo](demo.gif) once you have a recording -->
+![Cosmos demo](demo.gif)
 
 ---
 
