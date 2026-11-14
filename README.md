@@ -1,180 +1,155 @@
 # Cosmos
 
-An AI browser extension that reads pages, plans multi-step tasks, executes
-browser actions, and learns from experience via a layered memory system.
+**An AI-powered browser extension that reads pages, plans tasks, and acts — with memory.**
 
-## Status: Milestones 1-12 complete
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Chrome MV3](https://img.shields.io/badge/Chrome-MV3-brightgreen.svg)](https://developer.chrome.com/docs/extensions/mv3/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.5-blue.svg)](https://www.typescriptlang.org/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-### Architecture at a glance
+---
 
-- **Router** (`src/background/router.ts`): all request/response messaging
-  (settings, memory management) flows through here. No module calls another
-  module directly.
-- **Chat orchestrator** (`src/background/orchestrator.ts` +
-  `chatPort.ts`): the actual task-execution loop runs over a long-lived
-  `chrome.runtime.connect` port (named `"cosmos-chat"`), not request/response
-  messaging, because it needs to stream incremental updates — text, timeline
-  status, memory insights — as the task runs. One port per popup session;
-  cancellation and step-confirmation state are scoped to that connection.
+## What is Cosmos?
 
-### Milestone 3 — Memory Engine
+Cosmos is an open-source Chrome extension that lets you describe a goal in plain English and watches it get done — automatically. It reads the live DOM, asks an LLM to build a step-by-step plan, executes browser actions (click, type, scroll, navigate), and learns from each run so it gets better over time.
 
-`src/modules/memory/` — Dexie/IndexedDB database (`db.ts`) with five tables
-matching the five memory layers, and a `MemoryService` (`memoryService.ts`)
-that's the only thing allowed to touch them:
+No code. No configuration per site. Just describe what you want.
 
-- **Session**: current goal, execution state, active tabs — survives popup close/reopen
-- **User**: preferences, frequent sites, custom prompts, saved/approved form data
-- **Website**: per-domain structure notes and learned selectors
-- **Workflow**: named, reusable step sequences, with usage/success counters
-- **Failure**: what went wrong, what recovery worked, with a confidence score
+---
 
-Retrieval is exact-match-plus-keyword-overlap rather than embeddings-based —
-there's no vector store in this environment. The interface is shaped so a
-real embedding-based retriever could replace the internals later without
-changing callers.
+## Features
 
-### Milestone 4 — Chat UI
+| Automation | Intelligence |
+|---|---|
+| ⚡ AI task planning and execution | 🧠 5-layer adaptive memory (session, user, site, workflow, failure) |
+| 🎯 Click, type, scroll, navigate, select | 📋 Variable carry-forward between steps |
+| 📸 Screenshot on step failure | 🔄 Workflow library with reuse and success tracking |
+| 🖱️ Right-click context menu integration | 🕵️ Specialist agent for failure diagnosis |
 
-`src/modules/chat/chatStore.ts` (zustand) + `src/popup/components/`:
-streaming assistant text, a live execution timeline with per-step status,
-inline approve/skip for steps marked `requiresConfirmation`, memory-insight
-callouts, cancel, and retry-last-task.
+| Control | UI |
+|---|---|
+| 🧪 Dry-run mode (plan without acting) | 📊 Live execution timeline with per-step status |
+| 🔒 Blocked domains security list | 🌗 Dark / light / system theme |
+| 🔔 System notifications on task complete | ⌨️ Keyboard shortcuts + quick-action chips |
+| 📜 Task history with verdicts | 🔍 Memory insights panel |
 
-### Milestone 5 — DOM Reader
+---
 
-`src/modules/dom-reader/domReader.ts` (content-script side). Tags every
-interactive element with a stable `data-cosmos-id` attribute so the Action
-Executor can target it later without re-deriving a brittle CSS selector.
-Extracts interactive elements, forms, tables, heading hierarchy, and visible
-text into a `PageSnapshot`, plus flags (`hasCanvas`, `hasShadowDom`) the
-Vision Layer's heuristic uses.
+## How it works
 
-### Milestone 6 — Browser Controller
+```
+1. You type a goal        →  "Find the cheapest flight under £300"
+2. Cosmos reads the page  →  Extracts DOM structure, forms, links, text
+3. LLM plans steps        →  Validated JSON plan (zod schema)
+4. Actions execute        →  Live timeline streams back to the side panel
+```
 
-Split by where it has to run:
-- `src/modules/browser-controller/contentActions.ts` (content script):
-  click, type, scroll, select, file upload
-- `src/modules/browser-controller/tabController.ts` (background):
-  switch/open/close tab, navigate (waits for load), download detection via
-  `chrome.downloads.onCreated`
+Each run writes to memory — page notes, workflow patterns, failure recoveries — so Cosmos improves across sessions.
 
-**Known limitation, stated plainly**: a content script can't fabricate an
-arbitrary `File` from a disk path — browser security prevents that. Upload
-support here drives an existing `<input type="file">` from a `data:` URL
-already available in the session (e.g. a generated file, a pasted image);
-it can't pick a file from the user's filesystem unattended.
-
-### Milestone 7 — Planner
-
-`src/modules/planner/plannerService.ts`. Builds a prompt from the goal, the
-current `PageSnapshot`, any matching `WorkflowMemory`, and any relevant
-`FailureMemory`, then asks the LLM for a JSON plan. The response is validated
-against a `zod` schema (`shared/types/actions.ts`) before anything touches
-the page — a malformed or hallucinated plan is rejected rather than executed.
-
-### Milestone 8 — Vision Layer
-
-`src/modules/vision/visionService.ts`. `shouldUseVision()` is a cheap
-heuristic (shadow DOM present, canvas present, or DOM read came back nearly
-empty) that decides *whether* to pay for a screenshot + vision-model call at
-all — DOM reading is the default path because it's cheaper and more precise.
-
-### Milestone 9 — Dynamic Specialist Agent Framework
-
-`src/modules/specialist-agent/specialistAgentService.ts`. Per the spec, this
-is **not** a persistent agent — `invokeSpecialistAgent()` is a single stateless
-function call, triggered by the orchestrator only after a step has failed
-`MAX_RETRIES_BEFORE_SPECIALIST` (2) times. It diagnoses the specific failure,
-proposes a revised action, and its output is written straight into
-`FailureMemory` (always) and `WorkflowMemory` (only if flagged
-`generalizable` with confidence ≥ 0.5). Nothing about "the specialist"
-persists past the function returning — only the resulting knowledge does.
-
-### A note on OmniRoute
-
-OmniRoute is a self-hosted, open-source AI gateway that runs locally
-(`http://localhost:20128/v1` by default) rather than a hosted cloud API like
-OpenRouter or Groq. Onboarding and provider config reflect that — install it
-yourself, paste the key from your local dashboard, and the base URL is
-editable in Settings if you run it elsewhere (e.g. a home server via
-Tailscale).
+---
 
 ## Getting started
 
+### Prerequisites
+
+- Node 18+
+- Chrome 114+ (Manifest V3 side panel support)
+- An API key from [OpenRouter](https://openrouter.ai), [Groq](https://console.groq.com), or a local [OmniRoute](https://github.com/Cosmos-Agentic-AI/omniroute) instance
+
+### Install
+
 ```bash
+git clone https://github.com/Cosmos-Agentic-AI/Cosmos_browser_extension.git
+cd Cosmos_browser_extension
 npm install
-npm run build      # one-off build to dist/
-npm run dev         # watch mode
+npm run build        # outputs to dist/
 ```
 
-In Chrome: `chrome://extensions` → enable Developer mode → **Load unpacked**
-→ select `dist/`. On first install Chrome opens onboarding automatically.
+Then in Chrome:
+
+1. Go to `chrome://extensions`
+2. Enable **Developer mode** (top right)
+3. Click **Load unpacked** → select the `dist/` folder
+
+On first install Chrome opens the onboarding page automatically — add your API key there to start using Cosmos.
+
+### Supported AI providers
+
+| Provider | Type | Default base URL |
+|---|---|---|
+| [OmniRoute](https://github.com/Cosmos-Agentic-AI/omniroute) | Self-hosted (local) | `http://localhost:20128/v1` |
+| [OpenRouter](https://openrouter.ai) | Cloud | `https://openrouter.ai/api/v1` |
+| [Groq](https://console.groq.com) | Cloud | `https://api.groq.com/openai/v1` |
+
+You can override any base URL in Settings if you run a provider elsewhere (e.g. OmniRoute on a home server via Tailscale).
+
+---
 
 ## Architecture
 
 ```
 src/
-  background/       Router, chat orchestrator + port handler, service worker entry
-  content/          DOM Reader + Browser Controller (content-script side)
-  popup/            Chat UI (messages, execution timeline, settings)
-  onboarding/        First-run setup wizard (doubles as options page)
+  background/
+    index.ts              Service worker entry — installs context menu, side panel behaviour
+    router.ts             All request/response messaging (settings, memory) flows here
+    orchestrator.ts       Task execution loop — plan → act → check → repeat
+    chatPort.ts           Streams timeline/text/insights back to the UI over a named port
+
+  content/
+    domReader.ts          Extracts page structure into a PageSnapshot (interactive elements, forms, text)
+    contentActions.ts     Executes click/type/scroll/select directly in the page context
+
+  popup/                  Side panel UI (React 18 + Zustand)
+    App.tsx               Root with bottom tab navigation
+    components/           MessageList, ExecutionTimeline, ChatInput, MemoryInsights, ...
+
   modules/
-    api-manager/    Settings persistence + unified LLM client (streaming + non-streaming)
-    memory/         Dexie schema + MemoryService (5 layers)
-    dom-reader/     Structured page extraction
-    browser-controller/  Content-script actions + background tab control
-    action-executor/     Routes a PlanStep's action to the right surface, normalizes the result
-    planner/        Goal + context → validated Plan (zod)
-    vision/         Screenshot capture + vision-model fallback heuristic
-    specialist-agent/    Stateless failure diagnosis → memory write
-    chat/           Zustand store driving the popup off the streaming port
-  shared/           Cross-cutting types (messages, settings, memory, dom, actions, chat), utils, styles
+    api-manager/          Settings persistence + unified LLM client (streaming + non-streaming)
+    memory/               Dexie/IndexedDB schema + MemoryService — the only thing that touches the DB
+    dom-reader/           Page snapshot extraction (background-side orchestration)
+    browser-controller/   Tab control (background) + content-script action routing
+    action-executor/      Routes a PlanStep to the right surface, normalises the result
+    planner/              Goal + context → validated Plan (zod); variable carry-forward
+    vision/               Screenshot + vision-model fallback (triggered when DOM read is thin)
+    specialist-agent/     Stateless failure diagnosis → writes to FailureMemory + WorkflowMemory
+    chat/                 Zustand store driving the UI off the streaming port
+
+  shared/
+    types/                Cross-cutting types: messages, settings, memory, dom, actions, chat
+    utils/                sendToRouter, messaging helpers
+    styles/               Tailwind globals, CSS custom properties, animations
 ```
 
-### Milestone 10 — Chrome Side Panel
+**Key design rule:** background modules never import each other directly. All inter-module calls go through `router.ts` (request/response) or the `cosmos-chat` port (streaming). This keeps coupling low and makes each module independently testable.
 
-The popup has been replaced by the Chrome Side Panel API. Clicking the toolbar
-icon (or pressing `Ctrl+Shift+Space` / `Cmd+Shift+Space`) opens Cosmos in a
-persistent side panel that stays open while you browse, giving far more vertical
-space than a 560 px popup.
+---
 
-- `sidepanel/index.html` + `src/sidepanel/main.tsx` — the panel entry point
-  (reuses `App` unchanged).
-- `chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })` is set
-  on install in `background/index.ts`.
-- The old `default_popup` is removed from the manifest; the panel is now the
-  primary surface.
+## Development
 
-### Milestone 11 — Command History with Quick-Replay
+```bash
+npm run dev          # watch mode — rebuilds on save
+npm run type-check   # TypeScript strict check (zero errors required)
+npm run test         # Vitest unit tests
+npm run build        # production build to dist/
+```
 
-The last six goals you've sent are stored in `localStorage` and shown as
-quick-pick chips in `ChatInput` when you focus the text field. Clicking a chip
-re-sends that goal immediately — no retyping. The list deduplicates and keeps
-the most-recent entry first.
+After any change reload the extension at `chrome://extensions` → click the refresh icon on the Cosmos card.
 
-- `pushRecentGoal` / `loadRecentGoals` / `saveRecentGoals` live in
-  `chatStore.ts`, keeping the UI side clean.
-- `ChatInput` now accepts a `recentGoals` prop and renders the chip list above
-  the input row, with a fuzzy filter as you type.
+---
 
-### Milestone 12 — Keyboard Shortcut
+## Contributing
 
-`Ctrl+Shift+Space` (macOS: `Cmd+Shift+Space`) opens the Cosmos side panel
-without reaching for the mouse. The shortcut is registered in the manifest as
-`_execute_action` — Chrome's built-in command that simulates clicking the
-extension toolbar button, so it respects the `openPanelOnActionClick` behaviour
-set in Milestone 10 with zero extra code.
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
 
-## What's next (beyond the current milestones)
+The short version:
 
-- Replace keyword-overlap failure/workflow retrieval with real embeddings if
-  a vector store becomes available
-- Unit tests per module (the services are already structured as pure
-  functions/classes specifically to make this straightforward — none exist
-  yet)
-- A richer Settings screen (theme switching is modeled in `CosmosSettings`
-  but not yet exposed in the UI)
-- File upload from an actual filesystem picker would need `chrome.debugger`
-  or a native messaging host — out of scope for a content-script-only build
+1. [Open an issue](https://github.com/Cosmos-Agentic-AI/Cosmos_browser_extension/issues) to discuss the change first (especially for new features)
+2. Fork → create a branch → make your change
+3. `npm run type-check` and `npm run test` must pass
+4. Open a PR against `main` with a clear description of what and why
 
+---
+
+## License
+
+[MIT](LICENSE) — Copyright © 2024 Cosmos-Agentic-AI contributors
