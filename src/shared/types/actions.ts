@@ -27,6 +27,10 @@ export const ActionTypeSchema = z.enum([
   "hover",
   // Wait for a millisecond duration before continuing. action.value = ms as string.
   "wait",
+  // Read the system clipboard. Returns { text: string }.
+  "read_clipboard",
+  // Write to the system clipboard. action.value = text to write.
+  "write_clipboard",
 ]);
 export type ActionType = z.infer<typeof ActionTypeSchema>;
 

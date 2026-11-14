@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ExecutionStatus } from "@shared/types/chat";
+import { QuickActions } from "./QuickActions";
 
 const BUSY_STATUSES: ExecutionStatus[] = ["planning", "executing", "recovering", "awaiting_confirmation"];
 
@@ -8,6 +9,8 @@ export function ChatInput({
   onSend,
   onCancel,
   onRetry,
+  onClear,
+  onShowShortcuts,
   canRetry,
   recentGoals = [],
 }: {
@@ -15,6 +18,8 @@ export function ChatInput({
   onSend: (goal: string) => void;
   onCancel: () => void;
   onRetry: () => void;
+  onClear: () => void;
+  onShowShortcuts: () => void;
   canRetry: boolean;
   recentGoals?: string[];
 }) {
@@ -30,6 +35,12 @@ export function ChatInput({
     setShowRecent(false);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") { submit(); return; }
+    if (e.key === "?" && !value) { e.preventDefault(); onShowShortcuts(); }
+    if (e.key === "Escape") setShowRecent(false);
+  };
+
   const visibleRecent = recentGoals.filter((g) => !value || g.toLowerCase().includes(value.toLowerCase()));
 
   return (
@@ -42,6 +53,8 @@ export function ChatInput({
           Retry last task
         </button>
       )}
+
+      {!busy && <QuickActions onSelect={submit} disabled={busy} />}
 
       {showRecent && !busy && visibleRecent.length > 0 && (
         <div className="mb-2 flex flex-col gap-1">
@@ -61,11 +74,11 @@ export function ChatInput({
         <input
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && submit()}
+          onKeyDown={handleKeyDown}
           onFocus={() => setShowRecent(true)}
           onBlur={() => setTimeout(() => setShowRecent(false), 150)}
           disabled={busy}
-          placeholder={busy ? statusLabel(status) : "What should Cosmos do?"}
+          placeholder={busy ? statusLabel(status) : "What should Cosmos do? (? for shortcuts)"}
           className="flex-1 rounded-lg border border-cosmos-border bg-cosmos-surface px-3 py-2 text-sm outline-none focus:border-cosmos-accent disabled:opacity-60"
         />
         {busy ? (
@@ -73,15 +86,26 @@ export function ChatInput({
             onClick={onCancel}
             className="rounded-lg border border-cosmos-danger px-3 py-2 text-xs font-medium text-cosmos-danger"
           >
-            Cancel
+            Stop
           </button>
         ) : (
-          <button
-            onClick={() => submit()}
-            className="rounded-lg bg-cosmos-accent px-3 py-2 text-xs font-medium text-white hover:bg-cosmos-accentMuted"
-          >
-            Send
-          </button>
+          <>
+            {(status === "done" || status === "error") && (
+              <button
+                onClick={onClear}
+                className="rounded-lg border border-cosmos-border px-3 py-2 text-xs text-cosmos-textMuted hover:text-cosmos-text"
+                title="Clear chat"
+              >
+                ✕
+              </button>
+            )}
+            <button
+              onClick={() => submit()}
+              className="rounded-lg bg-cosmos-accent px-3 py-2 text-xs font-medium text-white hover:bg-cosmos-accentMuted"
+            >
+              Send
+            </button>
+          </>
         )}
       </div>
     </div>

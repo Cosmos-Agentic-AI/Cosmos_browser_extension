@@ -92,6 +92,23 @@ export async function runTask(
       variables: {},
     });
 
+    // Rough token estimate: plan prompt + response chars / 4
+    const planTokens = Math.round((goal.length + snapshot.mainText.length + JSON.stringify(plan).length) / 4);
+    emit({ kind: "token_usage", estimatedTokens: planTokens });
+
+    // Dry-run: show the plan without executing anything.
+    if (settings.dryRun) {
+      emit({ kind: "text_chunk", delta: `[DRY RUN] Plan for: ${goal}\n\n` });
+      plan.steps.forEach((s, i) => {
+        emit({ kind: "text_chunk", delta: `${i + 1}. ${s.description}  (${s.action.type})\n` });
+      });
+      emit({ kind: "memory_insight", note: `Dry-run mode — ${plan.steps.length} steps planned, nothing executed.` });
+      await memoryService.finishTaskRun(taskRunId, true, 0, "Dry run — plan shown, not executed.");
+      emit({ kind: "status", status: "done" });
+      emit({ kind: "done" });
+      return;
+    }
+
     let timeline: TimelineStep[] = plan.steps.map((step) => ({ step, status: "pending" }));
     emit({ kind: "timeline", timeline });
     emit({ kind: "text_chunk", delta: plan.reasoning ? plan.reasoning + "\n\n" : "" });
@@ -257,6 +274,15 @@ export async function runTask(
     });
     emit({ kind: "status", status: overallSuccess ? "done" : "error" });
     emit({ kind: "done" });
+
+    if (settings.notifyOnComplete) {
+      void chrome.notifications.create(`cosmos-task-${Date.now()}`, {
+        type: "basic",
+        iconUrl: "icons/icon48.png",
+        title: overallSuccess ? "Cosmos — Task complete" : "Cosmos — Task failed",
+        message: goal.slice(0, 100),
+      });
+    }
   } catch (error) {
     emit({ kind: "error", message: error instanceof Error ? error.message : String(error) });
     await memoryService.updateSession(sessionId, { executionState: "error" });

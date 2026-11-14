@@ -45,7 +45,11 @@
     "activeTab",
     "downloads",
     "webNavigation",
-    "sidePanel"
+    "sidePanel",
+    "notifications",
+    "contextMenus",
+    "clipboardRead",
+    "clipboardWrite"
   ],
   "host_permissions": ["<all_urls>"],
   "options_page": "onboarding/index.html",

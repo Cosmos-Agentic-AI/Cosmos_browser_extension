@@ -34,6 +34,7 @@ export type ChatStreamEvent =
   | { kind: "timeline"; timeline: TimelineStep[] }
   | { kind: "memory_insight"; note: string }
   | { kind: "screenshot_capture"; stepId: string; dataUrl: string }
+  | { kind: "token_usage"; estimatedTokens: number }
   | { kind: "done" }
   | { kind: "error"; message: string };
 

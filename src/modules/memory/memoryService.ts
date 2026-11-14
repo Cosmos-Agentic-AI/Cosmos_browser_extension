@@ -188,6 +188,10 @@ export class MemoryService {
     return cosmosDB.workflowMemory.where("domain").equals(domain).toArray();
   }
 
+  async deleteWorkflow(id: string): Promise<void> {
+    await cosmosDB.workflowMemory.delete(id);
+  }
+
   async recordWorkflowOutcome(id: string, success: boolean): Promise<void> {
     const wf = await cosmosDB.workflowMemory.get(id);
     if (!wf) return;
@@ -274,6 +278,11 @@ export class MemoryService {
       if (overlap > bestScore) { bestScore = overlap; best = c; }
     }
     return bestScore >= 2 ? best : null;
+  }
+
+  async listFailures(domain?: string): Promise<FailureMemory[]> {
+    if (domain) return cosmosDB.failureMemory.where("domain").equals(domain).toArray();
+    return cosmosDB.failureMemory.orderBy("lastOccurredAt").reverse().limit(50).toArray();
   }
 
   // ---------- Task History ----------

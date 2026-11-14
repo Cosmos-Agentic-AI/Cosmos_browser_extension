@@ -32,6 +32,8 @@ interface ChatState {
   status: ExecutionStatus;
   memoryInsights: string[];
   stepScreenshots: Record<string, string>; // stepId → data URL
+  extractedVariables: Record<string, unknown>;
+  estimatedTokens: number;
   pendingConfirmationStepId: string | null;
   lastGoal: string | null;
   recentGoals: string[];
@@ -43,6 +45,7 @@ interface ChatState {
   cancel: () => void;
   confirmStep: (stepId: string, approved: boolean) => void;
   retryLast: (tabId: number) => void;
+  clearRun: () => void;
 }
 
 function appendAssistantDelta(messages: ChatMessage[], delta: string): ChatMessage[] {
@@ -59,6 +62,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   status: "idle",
   memoryInsights: [],
   stepScreenshots: {},
+  extractedVariables: {},
+  estimatedTokens: 0,
   pendingConfirmationStepId: null,
   lastGoal: null,
   recentGoals: loadRecentGoals(),
@@ -88,11 +93,28 @@ export const useChatStore = create<ChatState>((set, get) => ({
           });
           break;
         }
-        case "memory_insight":
-          set((s) => ({ memoryInsights: [...s.memoryInsights, event.note] }));
-          break;
         case "screenshot_capture":
           set((s) => ({ stepScreenshots: { ...s.stepScreenshots, [event.stepId]: event.dataUrl } }));
+          break;
+        case "token_usage":
+          set((s) => ({ estimatedTokens: s.estimatedTokens + event.estimatedTokens }));
+          break;
+        case "memory_insight":
+          // Parse extracted variable insights to keep extractedVariables in sync.
+          set((s) => {
+            const match = event.note.match(/^Extracted "([^"]+)": (.+)$/);
+            if (match && match[1] && match[2]) {
+              try {
+                const key = match[1];
+                const parsed = JSON.parse(match[2]) as unknown;
+                return {
+                  memoryInsights: [...s.memoryInsights, event.note],
+                  extractedVariables: { ...s.extractedVariables, [key]: parsed },
+                };
+              } catch { /* ignore parse error */ }
+            }
+            return { memoryInsights: [...s.memoryInsights, event.note] };
+          });
           break;
         case "error":
           set({ errorMessage: event.message, status: "error" });
@@ -136,7 +158,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
   retryLast: (tabId) => {
     const { lastGoal, port } = get();
     if (!lastGoal || !port) return;
-    set({ timeline: [], memoryInsights: [], errorMessage: null, status: "planning" });
+    set({ timeline: [], memoryInsights: [], stepScreenshots: {}, extractedVariables: {}, estimatedTokens: 0, errorMessage: null, status: "planning" });
     port.postMessage({ type: "user_message", goal: lastGoal, tabId });
+  },
+
+  clearRun: () => {
+    get().port?.postMessage({ type: "cancel" });
+    set({ messages: [], timeline: [], memoryInsights: [], stepScreenshots: {}, extractedVariables: {}, estimatedTokens: 0, errorMessage: null, status: "idle" });
   },
 }));

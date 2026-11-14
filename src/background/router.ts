@@ -99,6 +99,37 @@ export async function routeMessage(
       return { cleared: true };
     }
 
+    case "MEMORY_LIST_FAILURES": {
+      const { domain } = (message.payload as { domain?: string }) ?? {};
+      return memoryService.listFailures(domain);
+    }
+
+    case "MEMORY_DELETE_WORKFLOW": {
+      const { id } = message.payload as { id: string };
+      await memoryService.deleteWorkflow(id);
+      return { deleted: true };
+    }
+
+    case "WORKFLOW_EXPORT": {
+      const { domain } = (message.payload as { domain?: string }) ?? {};
+      return memoryService.listWorkflows(domain);
+    }
+
+    case "SETTINGS_UPDATE_DRY_RUN": {
+      const { dryRun } = message.payload as { dryRun: boolean };
+      return apiManagerService.updateDryRun(dryRun);
+    }
+
+    case "SETTINGS_UPDATE_NOTIFY": {
+      const { notifyOnComplete } = message.payload as { notifyOnComplete: boolean };
+      return apiManagerService.updateNotifyOnComplete(notifyOnComplete);
+    }
+
+    case "WEBSITE_MEMORY_UPDATE_NOTES": {
+      const { domain, structureNotes } = message.payload as { domain: string; structureNotes: string };
+      return memoryService.upsertWebsiteMemory(domain, { structureNotes });
+    }
+
     default:
       throw new Error(`Router: no handler registered for message type "${message.type}"`);
   }

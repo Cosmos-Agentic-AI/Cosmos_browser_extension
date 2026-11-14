@@ -25,6 +25,10 @@ export interface CosmosSettings {
   blockedDomains: string[];
   /** Hard cap on plan steps per task. Prevents runaway token spend on ambiguous goals. */
   maxStepsPerTask: number;
+  /** Show the plan without executing any actions. */
+  dryRun: boolean;
+  /** Fire a Chrome notification when a task finishes while the panel is closed. */
+  notifyOnComplete: boolean;
 }
 
 export const DEFAULT_PROVIDERS: Record<ProviderId, ProviderConfig> = {
@@ -61,4 +65,6 @@ export const DEFAULT_SETTINGS: CosmosSettings = {
   onboardingComplete: false,
   blockedDomains: [],
   maxStepsPerTask: 15,
+  dryRun: false,
+  notifyOnComplete: true,
 };

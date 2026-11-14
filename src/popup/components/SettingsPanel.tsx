@@ -80,6 +80,20 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     setSettings(updated);
   };
 
+  const saveDryRun = async (dryRun: boolean) => {
+    const updated = await sendToRouter<{ dryRun: boolean }, CosmosSettings>(
+      "SETTINGS_UPDATE_DRY_RUN", { dryRun }, "popup",
+    );
+    setSettings(updated);
+  };
+
+  const saveNotifyOnComplete = async (notifyOnComplete: boolean) => {
+    const updated = await sendToRouter<{ notifyOnComplete: boolean }, CosmosSettings>(
+      "SETTINGS_UPDATE_NOTIFY", { notifyOnComplete }, "popup",
+    );
+    setSettings(updated);
+  };
+
   const saveBlockedDomains = async (raw: string) => {
     const blockedDomains = raw
       .split(/[\n,]+/)
@@ -217,6 +231,29 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
         <p className="mt-1 text-xs text-cosmos-textMuted">
           Hard cap on plan steps (1–50). Prevents runaway token spend on ambiguous goals.
         </p>
+      </div>
+
+      <div className="mb-5 space-y-2">
+        <div className="text-xs uppercase tracking-wide text-cosmos-textMuted">Behaviour</div>
+        {(
+          [
+            { key: "dryRun", label: "Dry-run mode", desc: "Show plan without executing any actions", value: settings.dryRun, save: saveDryRun },
+            { key: "notifyOnComplete", label: "Notifications", desc: "Show a Chrome notification when a task finishes", value: settings.notifyOnComplete, save: saveNotifyOnComplete },
+          ] as const
+        ).map(({ key, label, desc, value, save }) => (
+          <label key={key} className="flex cursor-pointer items-start gap-3 rounded-lg border border-cosmos-border bg-cosmos-surface p-3">
+            <div className="flex-1">
+              <div className="text-xs font-medium">{label}</div>
+              <div className="mt-0.5 text-[11px] text-cosmos-textMuted">{desc}</div>
+            </div>
+            <div
+              onClick={() => save(!value)}
+              className={`relative mt-0.5 h-5 w-9 shrink-0 cursor-pointer rounded-full transition-colors ${value ? "bg-cosmos-accent" : "bg-cosmos-border"}`}
+            >
+              <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${value ? "translate-x-4" : "translate-x-0.5"}`} />
+            </div>
+          </label>
+        ))}
       </div>
 
       <div className="mb-5">

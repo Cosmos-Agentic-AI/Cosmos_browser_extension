@@ -8,8 +8,10 @@ import { ChatInput } from "./components/ChatInput";
 import { MemoryInsights } from "./components/MemoryInsights";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { HistoryPanel } from "./components/HistoryPanel";
+import { WorkflowPanel } from "./components/WorkflowPanel";
+import { ShortcutsOverlay } from "./components/ShortcutsOverlay";
 
-type AppView = "chat" | "history" | "settings";
+type AppView = "chat" | "history" | "settings" | "workflows";
 
 function applyTheme(theme: CosmosSettings["theme"]) {
   const root = document.documentElement;
@@ -20,7 +22,7 @@ function applyTheme(theme: CosmosSettings["theme"]) {
     if (prefersDark) root.removeAttribute("data-theme");
     else root.setAttribute("data-theme", "light");
   } else {
-    root.removeAttribute("data-theme"); // dark is default via CSS :root
+    root.removeAttribute("data-theme");
   }
 }
 
@@ -28,6 +30,7 @@ export function App() {
   const [settings, setSettings] = useState<CosmosSettings | null>(null);
   const [view, setView] = useState<AppView>("chat");
   const [activeTabId, setActiveTabId] = useState<number | null>(null);
+  const [pendingGoal, setPendingGoal] = useState<string | null>(null);
 
   useEffect(() => {
     sendToRouter<undefined, CosmosSettings>("SETTINGS_GET_KEYS", undefined, "popup").then((s) => {
@@ -36,6 +39,14 @@ export function App() {
     });
     chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
       if (tab?.id !== undefined) setActiveTabId(tab.id);
+    });
+    // Pick up goals queued from the context menu right-click action.
+    chrome.storage.local.get("cosmos_pending_goal", (result) => {
+      const goal = result["cosmos_pending_goal"] as string | undefined;
+      if (goal) {
+        setPendingGoal(goal);
+        chrome.storage.local.remove("cosmos_pending_goal");
+      }
     });
   }, []);
 
@@ -59,24 +70,40 @@ export function App() {
 
   if (view === "settings") return <SettingsPanel onClose={() => setView("chat")} />;
   if (view === "history") return <HistoryPanel onClose={() => setView("chat")} />;
+  if (view === "workflows")
+    return (
+      <WorkflowPanel
+        onClose={() => setView("chat")}
+        onRunWorkflow={(goal) => { setPendingGoal(goal); setView("chat"); }}
+      />
+    );
 
   return (
     <ChatScreen
       activeTabId={activeTabId}
+      pendingGoal={pendingGoal}
+      onPendingGoalConsumed={() => setPendingGoal(null)}
       onOpenSettings={() => setView("settings")}
       onOpenHistory={() => setView("history")}
+      onOpenWorkflows={() => setView("workflows")}
     />
   );
 }
 
 function ChatScreen({
   activeTabId,
+  pendingGoal,
+  onPendingGoalConsumed,
   onOpenSettings,
   onOpenHistory,
+  onOpenWorkflows,
 }: {
   activeTabId: number | null;
+  pendingGoal: string | null;
+  onPendingGoalConsumed: () => void;
   onOpenSettings: () => void;
   onOpenHistory: () => void;
+  onOpenWorkflows: () => void;
 }) {
   const {
     messages,
@@ -84,6 +111,8 @@ function ChatScreen({
     status,
     memoryInsights,
     stepScreenshots,
+    extractedVariables,
+    estimatedTokens,
     pendingConfirmationStepId,
     errorMessage,
     connect,
@@ -91,19 +120,47 @@ function ChatScreen({
     cancel,
     confirmStep,
     retryLast,
+    clearRun,
     lastGoal,
     recentGoals,
   } = useChatStore();
+
+  const [showShortcuts, setShowShortcuts] = useState(false);
 
   useEffect(() => {
     connect();
   }, [connect]);
 
+  // Auto-submit a goal queued from the context menu or workflow panel.
+  useEffect(() => {
+    if (pendingGoal && activeTabId !== null && status === "idle") {
+      sendGoal(pendingGoal, activeTabId);
+      onPendingGoalConsumed();
+    }
+  }, [pendingGoal, activeTabId, status, sendGoal, onPendingGoalConsumed]);
+
+  const handleRetryStep = (description: string) => {
+    if (activeTabId !== null)
+      sendGoal(`Retry this step on the current page: ${description}`, activeTabId);
+  };
+
   return (
     <div className="flex h-full flex-col p-4">
+      {showShortcuts && <ShortcutsOverlay onClose={() => setShowShortcuts(false)} />}
+
       <div className="mb-3 flex items-center justify-between">
-        <div className="text-sm uppercase tracking-[0.2em] text-cosmos-accent">Cosmos</div>
+        <div className="flex items-center gap-2">
+          <div className="text-sm uppercase tracking-[0.2em] text-cosmos-accent">Cosmos</div>
+          {estimatedTokens > 0 && (
+            <span className="rounded bg-cosmos-surface px-1.5 py-0.5 text-[10px] text-cosmos-textMuted">
+              ~{(estimatedTokens / 1000).toFixed(1)}k tokens
+            </span>
+          )}
+        </div>
         <div className="flex gap-3">
+          <button onClick={onOpenWorkflows} className="text-xs text-cosmos-textMuted hover:text-cosmos-text">
+            Workflows
+          </button>
           <button onClick={onOpenHistory} className="text-xs text-cosmos-textMuted hover:text-cosmos-text">
             History
           </button>
@@ -113,12 +170,13 @@ function ChatScreen({
         </div>
       </div>
 
-      <MemoryInsights notes={memoryInsights} />
+      <MemoryInsights notes={memoryInsights} variables={extractedVariables} />
       <ExecutionTimeline
         timeline={timeline}
         pendingConfirmationStepId={pendingConfirmationStepId}
         stepScreenshots={stepScreenshots}
         onConfirm={confirmStep}
+        onRetryStep={handleRetryStep}
       />
 
       {errorMessage && (
@@ -136,6 +194,8 @@ function ChatScreen({
         onSend={(goal) => activeTabId !== null && sendGoal(goal, activeTabId)}
         onCancel={cancel}
         onRetry={() => activeTabId !== null && retryLast(activeTabId)}
+        onClear={clearRun}
+        onShowShortcuts={() => setShowShortcuts(true)}
         canRetry={Boolean(lastGoal)}
         recentGoals={recentGoals}
       />

@@ -28,10 +28,16 @@ function type(targetId: string | undefined, value: string | undefined) {
   if (!(el instanceof HTMLInputElement) && !(el instanceof HTMLTextAreaElement) && !(el as HTMLElement).isContentEditable) {
     throw new Error("Target element does not accept text input.");
   }
+  // Scroll into view before typing (improves reliability for off-screen inputs).
+  (el as HTMLElement).scrollIntoView({ block: "center", behavior: "instant" as ScrollBehavior });
   if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+    // Temporarily blur password/sensitive fields to avoid exposing values in screenshots.
+    const isSensitive = el instanceof HTMLInputElement && (el.type === "password" || el.autocomplete?.includes("cc-"));
+    if (isSensitive) (el.style as CSSStyleDeclaration & { webkitTextSecurity: string }).webkitTextSecurity = "disc";
     el.focus();
     el.value = value ?? "";
     dispatchInputEvents(el);
+    if (isSensitive) (el.style as CSSStyleDeclaration & { webkitTextSecurity: string }).webkitTextSecurity = "";
   } else {
     (el as HTMLElement).focus();
     (el as HTMLElement).innerText = value ?? "";
@@ -131,6 +137,14 @@ export async function executeContentAction(action: BrowserAction): Promise<unkno
       // eslint-disable-next-line no-new-func
       const result = await new Function("return (async () => { " + action.value + " })()")();
       return { result: JSON.stringify(result) };
+    }
+    case "read_clipboard": {
+      const text = await navigator.clipboard.readText();
+      return { text };
+    }
+    case "write_clipboard": {
+      await navigator.clipboard.writeText(action.value ?? "");
+      return { written: true };
     }
     default:
       throw new Error(`executeContentAction: unsupported action type "${action.type}" for content scope.`);
