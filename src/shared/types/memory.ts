@@ -84,6 +84,17 @@ export interface FailureMemory {
   embedding?: number[];
 }
 
+export interface TaskRun {
+  id: string;
+  goal: string;
+  domain: string | null;
+  startedAt: number;
+  finishedAt: number | null;
+  success: boolean | null; // null = still in-progress
+  stepCount: number;
+  verdict: string | null;
+}
+
 export interface MemoryExportBundle {
   exportedAt: number;
   userMemory: UserMemoryEntry[];

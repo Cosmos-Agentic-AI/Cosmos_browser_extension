@@ -3,6 +3,7 @@ import {
   FailureMemory,
   MemoryExportBundle,
   SessionMemory,
+  TaskRun,
   UserMemoryCategory,
   UserMemoryEntry,
   WebsiteMemory,
@@ -275,6 +276,29 @@ export class MemoryService {
     return bestScore >= 2 ? best : null;
   }
 
+  // ---------- Task History ----------
+
+  async startTaskRun(goal: string, domain: string | null): Promise<string> {
+    const id = `run:${Date.now()}:${Math.random().toString(36).slice(2, 7)}`;
+    const run: TaskRun = { id, goal, domain, startedAt: now(), finishedAt: null, success: null, stepCount: 0, verdict: null };
+    await cosmosDB.taskRuns.put(run);
+    return id;
+  }
+
+  async finishTaskRun(id: string, success: boolean, stepCount: number, verdict: string | null): Promise<void> {
+    const run = await cosmosDB.taskRuns.get(id);
+    if (!run) return;
+    await cosmosDB.taskRuns.put({ ...run, finishedAt: now(), success, stepCount, verdict });
+  }
+
+  async listTaskRuns(limit = 50): Promise<TaskRun[]> {
+    return cosmosDB.taskRuns.orderBy("startedAt").reverse().limit(limit).toArray();
+  }
+
+  async clearTaskRuns(): Promise<void> {
+    await cosmosDB.taskRuns.clear();
+  }
+
   // ---------- Cross-cutting ----------
 
   async exportAll(): Promise<MemoryExportBundle> {
@@ -307,6 +331,7 @@ export class MemoryService {
       cosmosDB.websiteMemory.clear(),
       cosmosDB.workflowMemory.clear(),
       cosmosDB.failureMemory.clear(),
+      cosmosDB.taskRuns.clear(),
     ]);
   }
 }

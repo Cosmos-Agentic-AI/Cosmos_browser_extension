@@ -89,6 +89,16 @@ export async function routeMessage(
       return { cleared: true };
     }
 
+    case "HISTORY_LIST": {
+      const { limit } = (message.payload as { limit?: number }) ?? {};
+      return memoryService.listTaskRuns(limit);
+    }
+
+    case "HISTORY_CLEAR": {
+      await memoryService.clearTaskRuns();
+      return { cleared: true };
+    }
+
     default:
       throw new Error(`Router: no handler registered for message type "${message.type}"`);
   }

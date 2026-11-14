@@ -2,6 +2,7 @@ import Dexie, { Table } from "dexie";
 import {
   FailureMemory,
   SessionMemory,
+  TaskRun,
   UserMemoryEntry,
   WebsiteMemory,
   WorkflowMemory,
@@ -20,6 +21,7 @@ export class CosmosDB extends Dexie {
   websiteMemory!: Table<WebsiteMemory, string>;
   workflowMemory!: Table<WorkflowMemory, string>;
   failureMemory!: Table<FailureMemory, string>;
+  taskRuns!: Table<TaskRun, string>;
 
   constructor() {
     super("cosmos_memory");
@@ -29,6 +31,14 @@ export class CosmosDB extends Dexie {
       websiteMemory: "id, domain, updatedAt",
       workflowMemory: "id, name, domain, updatedAt",
       failureMemory: "id, domain, taskSignature, lastOccurredAt",
+    });
+    this.version(2).stores({
+      session: "id, taskId, updatedAt",
+      userMemory: "id, category, key, updatedAt",
+      websiteMemory: "id, domain, updatedAt",
+      workflowMemory: "id, name, domain, updatedAt",
+      failureMemory: "id, domain, taskSignature, lastOccurredAt",
+      taskRuns: "id, startedAt, domain, success",
     });
   }
 }

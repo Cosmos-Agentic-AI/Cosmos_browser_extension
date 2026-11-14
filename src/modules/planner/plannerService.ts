@@ -18,6 +18,8 @@ export interface PlannerContext {
   relevantFailures: FailureMemory[];
   /** Steps already completed in a prior partial execution (for re-plans or context). */
   completedSteps?: CompletedStep[];
+  /** Data extracted by previous "extract" steps, available as named variables. */
+  variables?: Record<string, unknown>;
 }
 
 const SYSTEM_PROMPT = `You are the Planner module of Cosmos, an autonomous browser assistant.
@@ -97,6 +99,12 @@ function buildUserPrompt(ctx: PlannerContext): string {
   if (ctx.completedSteps && ctx.completedSteps.length > 0) {
     parts.push(
       `Steps already completed (do NOT re-plan these): ${JSON.stringify(ctx.completedSteps)}`,
+    );
+  }
+
+  if (ctx.variables && Object.keys(ctx.variables).length > 0) {
+    parts.push(
+      `Extracted variables from previous steps (reference these by name in action values as {{variable_name}}): ${JSON.stringify(ctx.variables)}`,
     );
   }
 

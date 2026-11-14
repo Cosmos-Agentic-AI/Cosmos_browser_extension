@@ -7,6 +7,9 @@ import { ExecutionTimeline } from "./components/ExecutionTimeline";
 import { ChatInput } from "./components/ChatInput";
 import { MemoryInsights } from "./components/MemoryInsights";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { HistoryPanel } from "./components/HistoryPanel";
+
+type AppView = "chat" | "history" | "settings";
 
 function applyTheme(theme: CosmosSettings["theme"]) {
   const root = document.documentElement;
@@ -23,7 +26,7 @@ function applyTheme(theme: CosmosSettings["theme"]) {
 
 export function App() {
   const [settings, setSettings] = useState<CosmosSettings | null>(null);
-  const [showSettings, setShowSettings] = useState(false);
+  const [view, setView] = useState<AppView>("chat");
   const [activeTabId, setActiveTabId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -54,25 +57,33 @@ export function App() {
     );
   }
 
-  if (showSettings) {
-    return <SettingsPanel onClose={() => setShowSettings(false)} />;
-  }
+  if (view === "settings") return <SettingsPanel onClose={() => setView("chat")} />;
+  if (view === "history") return <HistoryPanel onClose={() => setView("chat")} />;
 
-  return <ChatScreen activeTabId={activeTabId} onOpenSettings={() => setShowSettings(true)} />;
+  return (
+    <ChatScreen
+      activeTabId={activeTabId}
+      onOpenSettings={() => setView("settings")}
+      onOpenHistory={() => setView("history")}
+    />
+  );
 }
 
 function ChatScreen({
   activeTabId,
   onOpenSettings,
+  onOpenHistory,
 }: {
   activeTabId: number | null;
   onOpenSettings: () => void;
+  onOpenHistory: () => void;
 }) {
   const {
     messages,
     timeline,
     status,
     memoryInsights,
+    stepScreenshots,
     pendingConfirmationStepId,
     errorMessage,
     connect,
@@ -92,15 +103,21 @@ function ChatScreen({
     <div className="flex h-full flex-col p-4">
       <div className="mb-3 flex items-center justify-between">
         <div className="text-sm uppercase tracking-[0.2em] text-cosmos-accent">Cosmos</div>
-        <button onClick={onOpenSettings} className="text-xs text-cosmos-textMuted hover:text-cosmos-text">
-          Settings
-        </button>
+        <div className="flex gap-3">
+          <button onClick={onOpenHistory} className="text-xs text-cosmos-textMuted hover:text-cosmos-text">
+            History
+          </button>
+          <button onClick={onOpenSettings} className="text-xs text-cosmos-textMuted hover:text-cosmos-text">
+            Settings
+          </button>
+        </div>
       </div>
 
       <MemoryInsights notes={memoryInsights} />
       <ExecutionTimeline
         timeline={timeline}
         pendingConfirmationStepId={pendingConfirmationStepId}
+        stepScreenshots={stepScreenshots}
         onConfirm={confirmStep}
       />
 

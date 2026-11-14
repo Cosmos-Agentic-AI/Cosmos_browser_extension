@@ -31,6 +31,7 @@ interface ChatState {
   timeline: TimelineStep[];
   status: ExecutionStatus;
   memoryInsights: string[];
+  stepScreenshots: Record<string, string>; // stepId → data URL
   pendingConfirmationStepId: string | null;
   lastGoal: string | null;
   recentGoals: string[];
@@ -57,6 +58,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   timeline: [],
   status: "idle",
   memoryInsights: [],
+  stepScreenshots: {},
   pendingConfirmationStepId: null,
   lastGoal: null,
   recentGoals: loadRecentGoals(),
@@ -89,6 +91,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         case "memory_insight":
           set((s) => ({ memoryInsights: [...s.memoryInsights, event.note] }));
           break;
+        case "screenshot_capture":
+          set((s) => ({ stepScreenshots: { ...s.stepScreenshots, [event.stepId]: event.dataUrl } }));
+          break;
         case "error":
           set({ errorMessage: event.message, status: "error" });
           break;
@@ -110,6 +115,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       messages: [...messages, { id: crypto.randomUUID(), role: "user", content: goal, createdAt: Date.now() }],
       timeline: [],
       memoryInsights: [],
+      stepScreenshots: {},
       errorMessage: null,
       lastGoal: goal,
       recentGoals: updated,

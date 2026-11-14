@@ -19,10 +19,12 @@ const STATUS_ICON: Record<TimelineStep["status"], string> = {
 export function ExecutionTimeline({
   timeline,
   pendingConfirmationStepId,
+  stepScreenshots,
   onConfirm,
 }: {
   timeline: TimelineStep[];
   pendingConfirmationStepId: string | null;
+  stepScreenshots: Record<string, string>;
   onConfirm: (stepId: string, approved: boolean) => void;
 }) {
   if (timeline.length === 0) return null;
@@ -38,6 +40,13 @@ export function ExecutionTimeline({
               <div>{t.step.description}</div>
               {t.status === "failed" && t.result?.error && (
                 <div className="mt-0.5 text-[11px] text-cosmos-danger/80">{t.result.error}</div>
+              )}
+              {t.status === "failed" && stepScreenshots[t.step.id] && (
+                <img
+                  src={stepScreenshots[t.step.id]}
+                  alt="Failure screenshot"
+                  className="mt-1.5 max-h-28 w-full rounded border border-cosmos-danger/30 object-cover object-top"
+                />
               )}
               {pendingConfirmationStepId === t.step.id && (
                 <div className="mt-1.5 flex gap-2">

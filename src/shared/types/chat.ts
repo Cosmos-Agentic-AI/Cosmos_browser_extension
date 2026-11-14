@@ -33,6 +33,7 @@ export type ChatStreamEvent =
   | { kind: "status"; status: ExecutionStatus }
   | { kind: "timeline"; timeline: TimelineStep[] }
   | { kind: "memory_insight"; note: string }
+  | { kind: "screenshot_capture"; stepId: string; dataUrl: string }
   | { kind: "done" }
   | { kind: "error"; message: string };
 

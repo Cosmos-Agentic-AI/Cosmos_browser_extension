@@ -44,6 +44,7 @@ export async function runTask(
 
     const snapshot = await readPageSnapshot(tabId);
     const domain = domainOf(snapshot.url);
+    const taskRunId = await memoryService.startTaskRun(goal, domain);
 
     // Enforce domain blocklist before doing any work.
     if (domain && settings.blockedDomains.length > 0) {
@@ -88,6 +89,7 @@ export async function runTask(
       websiteMemory,
       matchingWorkflow,
       relevantFailures,
+      variables: {},
     });
 
     let timeline: TimelineStep[] = plan.steps.map((step) => ({ step, status: "pending" }));
@@ -96,6 +98,7 @@ export async function runTask(
 
     const failureCounts = new Map<string, ActionResult[]>();
     const completedSteps: CompletedStep[] = [];
+    const extractedVariables: Record<string, unknown> = {};
     let overallSuccess = true;
     let stepIndex = 0;
     const maxSteps = settings.maxStepsPerTask ?? 15;
@@ -186,6 +189,11 @@ export async function runTask(
         overallSuccess = false;
         emit({ kind: "text_chunk", delta: `Step failed: ${step.description} — ${result.error}\n` });
         completedSteps.push({ order: step.order, description: step.description, status: "failed" });
+        // Capture a screenshot so the user can see the failure state.
+        try {
+          const dataUrl = await chrome.tabs.captureVisibleTab({ format: "jpeg", quality: 70 });
+          emit({ kind: "screenshot_capture", stepId: step.id, dataUrl });
+        } catch { /* non-fatal — screenshot unavailable on restricted pages */ }
         await memoryService.recordFailure({
           domain,
           taskSignature: step.description,
@@ -196,6 +204,14 @@ export async function runTask(
 
       emit({ kind: "text_chunk", delta: `Done: ${step.description}\n` });
       completedSteps.push({ order: step.order, description: step.description, status: "done" });
+
+      // Store extract results as named variables for downstream steps.
+      if (step.action.type === "extract" && result.output != null) {
+        const varKey = step.description.toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(0, 30);
+        extractedVariables[varKey] = result.output;
+        await memoryService.updateSession(sessionId, { variables: { ...extractedVariables } });
+        emit({ kind: "memory_insight", note: `Extracted "${varKey}": ${JSON.stringify(result.output).slice(0, 120)}` });
+      }
 
       // Early completion check — cheap LLM call to detect if goal is already achieved.
       const freshSnap = await readPageSnapshot(tabId, false);
@@ -213,6 +229,8 @@ export async function runTask(
     if (verdict) {
       emit({ kind: "memory_insight", note: `Task judge: ${verdict}` });
     }
+
+    await memoryService.finishTaskRun(taskRunId, overallSuccess, completedSteps.length, verdict ?? null);
 
     if (domain) {
       await memoryService.upsertWebsiteMemory(domain, {});
