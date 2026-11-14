@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ExecutionStatus } from "@shared/types/chat";
+import { IconSend, IconStop, IconX, IconSpinner } from "./Icons";
 import { QuickActions } from "./QuickActions";
 
 const BUSY_STATUSES: ExecutionStatus[] = ["planning", "executing", "recovering", "awaiting_confirmation"];
@@ -25,7 +26,9 @@ export function ChatInput({
 }) {
   const [value, setValue] = useState("");
   const [showRecent, setShowRecent] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   const busy = BUSY_STATUSES.includes(status);
+  const isDone = status === "done" || status === "error";
 
   const submit = (goal = value) => {
     const trimmed = goal.trim();
@@ -36,42 +39,57 @@ export function ChatInput({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") { submit(); return; }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); return; }
     if (e.key === "?" && !value) { e.preventDefault(); onShowShortcuts(); }
-    if (e.key === "Escape") setShowRecent(false);
+    if (e.key === "Escape") { setShowRecent(false); inputRef.current?.blur(); }
   };
 
-  const visibleRecent = recentGoals.filter((g) => !value || g.toLowerCase().includes(value.toLowerCase()));
+  const visibleRecent = recentGoals.filter(
+    (g) => !value || g.toLowerCase().includes(value.toLowerCase()),
+  );
 
   return (
-    <div className="border-t border-cosmos-border pt-3">
-      {status === "error" && canRetry && (
-        <button
-          onClick={onRetry}
-          className="mb-2 w-full rounded-lg border border-cosmos-border py-1.5 text-xs text-cosmos-textMuted hover:text-cosmos-text"
-        >
-          Retry last task
-        </button>
-      )}
-
+    <div className="flex flex-col gap-2 pt-2 border-t border-cosmos-border">
+      {/* Quick actions */}
       {!busy && <QuickActions onSelect={submit} disabled={busy} />}
 
+      {/* Recent goals dropdown */}
       {showRecent && !busy && visibleRecent.length > 0 && (
-        <div className="mb-2 flex flex-col gap-1">
+        <div className="rounded-xl border border-cosmos-border bg-cosmos-surface shadow-md overflow-hidden animate-slide-up">
           {visibleRecent.map((goal) => (
             <button
               key={goal}
               onMouseDown={(e) => { e.preventDefault(); submit(goal); }}
-              className="truncate rounded-md border border-cosmos-border bg-cosmos-surface px-3 py-1.5 text-left text-xs text-cosmos-textMuted hover:border-cosmos-accent hover:text-cosmos-text"
+              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-xs text-cosmos-textMuted hover:bg-cosmos-surface2 hover:text-cosmos-text transition-colors first:rounded-t-xl last:rounded-b-xl"
             >
-              {goal}
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className="shrink-0 opacity-40">
+                <path d="M1 5h8M5 1v8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+              <span className="truncate">{goal}</span>
             </button>
           ))}
         </div>
       )}
 
-      <div className="flex items-center gap-2">
+      {/* Retry banner */}
+      {status === "error" && canRetry && (
+        <button
+          onClick={onRetry}
+          className="flex items-center justify-center gap-1.5 rounded-xl border border-cosmos-border py-2 text-xs text-cosmos-textMuted hover:border-cosmos-accent hover:text-cosmos-text transition-colors"
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M1 6a5 5 0 1 1 1 3M1 6V3M1 6h3" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Retry last task
+        </button>
+      )}
+
+      {/* Main input row */}
+      <div className={`flex items-center gap-2 rounded-2xl border bg-cosmos-surface px-1 py-1 transition-all duration-200 ${
+        busy ? "border-cosmos-accentDim" : "border-cosmos-border focus-within:border-cosmos-accent focus-within:shadow-glow"
+      }`}>
         <input
+          ref={inputRef}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -79,34 +97,45 @@ export function ChatInput({
           onBlur={() => setTimeout(() => setShowRecent(false), 150)}
           disabled={busy}
           placeholder={busy ? statusLabel(status) : "What should Cosmos do? (? for shortcuts)"}
-          className="flex-1 rounded-lg border border-cosmos-border bg-cosmos-surface px-3 py-2 text-sm outline-none focus:border-cosmos-accent disabled:opacity-60"
+          className="flex-1 bg-transparent px-3 py-2 text-sm text-cosmos-text placeholder:text-cosmos-textMuted outline-none disabled:opacity-50"
         />
-        {busy ? (
-          <button
-            onClick={onCancel}
-            className="rounded-lg border border-cosmos-danger px-3 py-2 text-xs font-medium text-cosmos-danger"
-          >
-            Stop
-          </button>
-        ) : (
-          <>
-            {(status === "done" || status === "error") && (
+
+        <div className="flex items-center gap-1 pr-1">
+          {busy ? (
+            <>
+              <div className="flex items-center gap-1.5 px-2 py-1.5">
+                <IconSpinner size={13} className="text-cosmos-accent" />
+                <span className="text-2xs text-cosmos-textMuted hidden sm:block">Working…</span>
+              </div>
               <button
-                onClick={onClear}
-                className="rounded-lg border border-cosmos-border px-3 py-2 text-xs text-cosmos-textMuted hover:text-cosmos-text"
-                title="Clear chat"
+                onClick={onCancel}
+                title="Stop"
+                className="flex h-8 w-8 items-center justify-center rounded-xl border border-cosmos-danger/50 text-cosmos-danger hover:bg-cosmos-dangerDim transition-colors"
               >
-                ✕
+                <IconStop size={14} />
               </button>
-            )}
-            <button
-              onClick={() => submit()}
-              className="rounded-lg bg-cosmos-accent px-3 py-2 text-xs font-medium text-white hover:bg-cosmos-accentMuted"
-            >
-              Send
-            </button>
-          </>
-        )}
+            </>
+          ) : (
+            <>
+              {isDone && (
+                <button
+                  onClick={onClear}
+                  title="Clear"
+                  className="flex h-8 w-8 items-center justify-center rounded-xl text-cosmos-textMuted hover:bg-cosmos-surface2 hover:text-cosmos-text transition-colors"
+                >
+                  <IconX size={13} />
+                </button>
+              )}
+              <button
+                onClick={() => submit()}
+                disabled={!value.trim()}
+                className="flex h-8 w-8 items-center justify-center rounded-xl gradient-bg text-white shadow-sm hover:opacity-90 transition-opacity disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <IconSend size={14} />
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -114,15 +143,10 @@ export function ChatInput({
 
 function statusLabel(status: ExecutionStatus): string {
   switch (status) {
-    case "planning":
-      return "Planning…";
-    case "executing":
-      return "Executing…";
-    case "recovering":
-      return "Recovering from a failed step…";
-    case "awaiting_confirmation":
-      return "Waiting for your confirmation above…";
-    default:
-      return "Working…";
+    case "planning":          return "Planning your task…";
+    case "executing":         return "Executing…";
+    case "recovering":        return "Recovering from a failed step…";
+    case "awaiting_confirmation": return "Waiting for your approval above…";
+    default:                  return "Working…";
   }
 }

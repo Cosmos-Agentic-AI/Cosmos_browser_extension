@@ -1,33 +1,181 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Dark theme is default; light theme applied via [data-theme="light"] on <html>. */
+/* ─── Design tokens ────────────────────────────────────────────────────────── */
 :root {
-  --cosmos-bg: #0b0d12;
-  --cosmos-surface: #12141c;
-  --cosmos-border: #232637;
-  --cosmos-accent: #7c5cff;
-  --cosmos-accent-muted: #5b46b8;
-  --cosmos-text: #e6e7ee;
-  --cosmos-text-muted: #8a8da3;
-  --cosmos-danger: #ef4444;
-  --cosmos-success: #22c55e;
+  /* Surfaces */
+  --cosmos-bg:          #09090f;
+  --cosmos-surface:     #0f1017;
+  --cosmos-surface-2:   #14151e;
+  --cosmos-surface-3:   #1a1b26;
+
+  /* Borders */
+  --cosmos-border:      #1f2133;
+  --cosmos-border-soft: rgba(255, 255, 255, 0.055);
+
+  /* Accent (purple → violet) */
+  --cosmos-accent:        #7c5cff;
+  --cosmos-accent-muted:  #5b46b8;
+  --cosmos-accent-dim:    rgba(124, 92, 255, 0.12);
+  --cosmos-accent-glow:   rgba(124, 92, 255, 0.25);
+  --cosmos-gradient:      linear-gradient(135deg, #7c5cff 0%, #a855f7 100%);
+
+  /* Text */
+  --cosmos-text:         #eaebf2;
+  --cosmos-text-muted:   #7b7e96;
+  --cosmos-text-subtle:  #3a3c52;
+
+  /* Semantic */
+  --cosmos-danger:       #f04444;
+  --cosmos-danger-dim:   rgba(240, 68, 68, 0.1);
+  --cosmos-success:      #22c55e;
+  --cosmos-success-dim:  rgba(34, 197, 94, 0.1);
+  --cosmos-warning:      #f59e0b;
+  --cosmos-warning-dim:  rgba(245, 158, 11, 0.1);
+
+  /* Shadows */
+  --shadow-sm:  0 1px 3px rgba(0,0,0,0.5), 0 1px 2px rgba(0,0,0,0.4);
+  --shadow-md:  0 4px 12px rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.4);
+  --shadow-lg:  0 8px 32px rgba(0,0,0,0.6), 0 4px 16px rgba(0,0,0,0.4);
+  --shadow-glow: 0 0 24px var(--cosmos-accent-glow), 0 0 60px rgba(124,92,255,0.06);
 }
 
 [data-theme="light"] {
-  --cosmos-bg: #f4f5fc;
-  --cosmos-surface: #ffffff;
-  --cosmos-border: #dfe1f0;
-  --cosmos-accent: #7c5cff;
-  --cosmos-accent-muted: #5b46b8;
-  --cosmos-text: #1a1b2e;
-  --cosmos-text-muted: #6b6e8a;
-  --cosmos-danger: #dc2626;
-  --cosmos-success: #16a34a;
+  --cosmos-bg:          #f2f3fb;
+  --cosmos-surface:     #ffffff;
+  --cosmos-surface-2:   #f7f8fe;
+  --cosmos-surface-3:   #eef0f9;
+  --cosmos-border:      #e1e3f2;
+  --cosmos-border-soft: rgba(0, 0, 0, 0.055);
+  --cosmos-accent-dim:  rgba(124, 92, 255, 0.08);
+  --cosmos-accent-glow: rgba(124, 92, 255, 0.15);
+  --cosmos-text:        #1a1b2e;
+  --cosmos-text-muted:  #676a84;
+  --cosmos-text-subtle: #c5c7d8;
+  --cosmos-danger:      #dc2626;
+  --cosmos-danger-dim:  rgba(220, 38, 38, 0.08);
+  --cosmos-success:     #16a34a;
+  --cosmos-success-dim: rgba(22, 163, 74, 0.08);
+  --shadow-sm:  0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md:  0 4px 12px rgba(0,0,0,0.1), 0 2px 6px rgba(0,0,0,0.06);
+  --shadow-lg:  0 8px 32px rgba(0,0,0,0.12), 0 4px 16px rgba(0,0,0,0.08);
+  --shadow-glow: 0 0 20px var(--cosmos-accent-glow);
 }
+
+/* ─── Base ─────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
 
 body {
   margin: 0;
   min-height: 100vh;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: var(--cosmos-bg);
+  color: var(--cosmos-text);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: var(--cosmos-accent-dim);
+  color: var(--cosmos-text);
+}
+
+/* ─── Custom scrollbar ─────────────────────────────────────────────────────── */
+::-webkit-scrollbar          { width: 3px; height: 3px; }
+::-webkit-scrollbar-track    { background: transparent; }
+::-webkit-scrollbar-thumb    { background: var(--cosmos-border); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--cosmos-text-subtle); }
+
+/* ─── Animations ───────────────────────────────────────────────────────────── */
+@keyframes cosmos-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes cosmos-slide-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes cosmos-slide-down {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes cosmos-pulse-ring {
+  0%   { box-shadow: 0 0 0 0 var(--cosmos-accent-glow); }
+  70%  { box-shadow: 0 0 0 6px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+@keyframes cosmos-pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.75); }
+}
+@keyframes cosmos-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@keyframes cosmos-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes cosmos-progress-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+
+/* ─── Utility classes ──────────────────────────────────────────────────────── */
+@layer utilities {
+  .animate-fade-in    { animation: cosmos-fade-in  0.2s ease-out both; }
+  .animate-slide-up   { animation: cosmos-slide-up 0.25s ease-out both; }
+  .animate-slide-down { animation: cosmos-slide-down 0.2s ease-out both; }
+  .animate-pulse-dot  { animation: cosmos-pulse-dot 1.8s ease-in-out infinite; }
+  .animate-pulse-ring { animation: cosmos-pulse-ring 2s ease-out infinite; }
+  .animate-shimmer    {
+    background: linear-gradient(90deg, var(--cosmos-surface) 25%, var(--cosmos-surface-2) 50%, var(--cosmos-surface) 75%);
+    background-size: 200% 100%;
+    animation: cosmos-shimmer 1.4s infinite;
+  }
+  .animate-spin-slow  { animation: cosmos-spin 1.4s linear infinite; }
+  .animate-progress-pulse { animation: cosmos-progress-pulse 1.5s ease-in-out infinite; }
+
+  .gradient-text {
+    background: var(--cosmos-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .gradient-bg { background: var(--cosmos-gradient); }
+
+  .glass {
+    background: rgba(15, 16, 23, 0.85);
+    backdrop-filter: blur(16px) saturate(1.4);
+    -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  }
+  [data-theme="light"] .glass {
+    background: rgba(255, 255, 255, 0.85);
+  }
+
+  .shadow-glow { box-shadow: var(--shadow-glow); }
+  .shadow-sm   { box-shadow: var(--shadow-sm); }
+  .shadow-md   { box-shadow: var(--shadow-md); }
+  .shadow-lg   { box-shadow: var(--shadow-lg); }
+
+  .ring-accent     { box-shadow: 0 0 0 1px var(--cosmos-accent); }
+  .ring-accent-glow { box-shadow: 0 0 0 1px var(--cosmos-accent), var(--shadow-glow); }
+  .ring-danger     { box-shadow: 0 0 0 1px var(--cosmos-danger); }
+  .ring-success    { box-shadow: 0 0 0 1px var(--cosmos-success); }
+
+  .text-balance { text-wrap: balance; }
+
+  .truncate-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
 }

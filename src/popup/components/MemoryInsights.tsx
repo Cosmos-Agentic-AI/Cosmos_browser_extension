@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { IconBrain, IconVariable, IconChevronDown } from "./Icons";
 
 export function MemoryInsights({
   notes,
@@ -13,30 +14,44 @@ export function MemoryInsights({
   if (notes.length === 0 && !hasVars) return null;
 
   return (
-    <div className="mb-3 space-y-1">
+    <div className="mb-3 space-y-1.5 animate-slide-down">
       {notes.map((note, i) => (
         <div
           key={i}
-          className="rounded-md border border-cosmos-accentMuted/40 bg-cosmos-accentMuted/10 px-2.5 py-1.5 text-[11px] text-cosmos-textMuted"
+          className="flex items-start gap-2.5 rounded-xl border border-cosmos-accentDim bg-cosmos-accentDim px-3 py-2 animate-fade-in"
+          style={{ animationDelay: `${i * 0.05}s` }}
         >
-          🧠 {note}
+          <IconBrain size={12} className="mt-0.5 shrink-0 text-cosmos-accent" />
+          <p className="text-xs text-cosmos-textMuted leading-relaxed">{note}</p>
         </div>
       ))}
+
       {hasVars && (
-        <div className="rounded-md border border-cosmos-border bg-cosmos-surface px-2.5 py-1.5 text-[11px]">
+        <div className="rounded-xl border border-cosmos-border bg-cosmos-surface overflow-hidden">
           <button
             onClick={() => setShowVars((v) => !v)}
-            className="flex w-full items-center justify-between text-cosmos-textMuted hover:text-cosmos-text"
+            className="flex w-full items-center gap-2.5 px-3 py-2 hover:bg-cosmos-surface2 transition-colors"
           >
-            <span>📦 Extracted variables ({Object.keys(variables).length})</span>
-            <span>{showVars ? "▲" : "▼"}</span>
+            <IconVariable size={12} className="shrink-0 text-cosmos-accent" />
+            <span className="flex-1 text-left text-xs text-cosmos-textMuted">
+              Extracted variables
+              <span className="ml-1.5 rounded-md bg-cosmos-surface2 px-1.5 py-0.5 text-2xs text-cosmos-textMuted">
+                {Object.keys(variables!).length}
+              </span>
+            </span>
+            <IconChevronDown
+              size={12}
+              className={`text-cosmos-textSubtle transition-transform duration-200 ${showVars ? "rotate-180" : ""}`}
+            />
           </button>
           {showVars && (
-            <div className="mt-1.5 space-y-1">
-              {Object.entries(variables).map(([k, v]) => (
-                <div key={k} className="flex gap-2">
-                  <span className="font-mono text-cosmos-accent">{`{{${k}}}`}</span>
-                  <span className="truncate text-cosmos-textMuted">
+            <div className="border-t border-cosmos-border px-3 py-2.5 space-y-1.5 animate-slide-down">
+              {Object.entries(variables!).map(([k, v]) => (
+                <div key={k} className="flex items-start gap-2 text-xs">
+                  <code className="shrink-0 rounded bg-cosmos-surface2 px-1.5 py-0.5 text-2xs font-mono text-cosmos-accent">
+                    {`{{${k}}}`}
+                  </code>
+                  <span className="text-cosmos-textMuted truncate-2 leading-relaxed">
                     {typeof v === "string" ? v : JSON.stringify(v)}
                   </span>
                 </div>

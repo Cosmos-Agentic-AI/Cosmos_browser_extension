@@ -10,16 +10,21 @@ import { SettingsPanel } from "./components/SettingsPanel";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { WorkflowPanel } from "./components/WorkflowPanel";
 import { ShortcutsOverlay } from "./components/ShortcutsOverlay";
+import {
+  IconChat,
+  IconWorkflows,
+  IconHistory,
+  IconSettings,
+  IconSparkle,
+} from "./components/Icons";
 
 type AppView = "chat" | "history" | "settings" | "workflows";
 
 function applyTheme(theme: CosmosSettings["theme"]) {
   const root = document.documentElement;
-  if (theme === "light") {
-    root.setAttribute("data-theme", "light");
-  } else if (theme === "system") {
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    if (prefersDark) root.removeAttribute("data-theme");
+  if (theme === "light") root.setAttribute("data-theme", "light");
+  else if (theme === "system") {
+    if (window.matchMedia("(prefers-color-scheme: dark)").matches) root.removeAttribute("data-theme");
     else root.setAttribute("data-theme", "light");
   } else {
     root.removeAttribute("data-theme");
@@ -40,7 +45,6 @@ export function App() {
     chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
       if (tab?.id !== undefined) setActiveTabId(tab.id);
     });
-    // Pick up goals queued from the context menu right-click action.
     chrome.storage.local.get("cosmos_pending_goal", (result) => {
       const goal = result["cosmos_pending_goal"] as string | undefined;
       if (goal) {
@@ -51,42 +55,112 @@ export function App() {
   }, []);
 
   if (!settings) {
-    return <div className="p-6 text-sm text-cosmos-textMuted">Loading Cosmos…</div>;
+    return (
+      <div className="flex h-full items-center justify-center gap-3 flex-col">
+        <div className="flex h-10 w-10 items-center justify-center rounded-2xl gradient-bg shadow-glow">
+          <IconSparkle size={18} className="text-white" />
+        </div>
+        <p className="text-xs text-cosmos-textMuted">Loading Cosmos…</p>
+      </div>
+    );
   }
 
   if (!settings.onboardingComplete) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-        <p className="text-sm text-cosmos-textMuted">Finish setup to start using Cosmos.</p>
+      <div className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl gradient-bg shadow-glow">
+          <IconSparkle size={22} className="text-white" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-cosmos-text">Set up Cosmos</p>
+          <p className="mt-1 text-xs text-cosmos-textMuted">Add an API key to get started.</p>
+        </div>
         <button
           onClick={() => chrome.runtime.openOptionsPage()}
-          className="rounded-lg bg-cosmos-accent px-4 py-2 text-sm font-medium text-white hover:bg-cosmos-accentMuted"
+          className="rounded-xl gradient-bg px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity shadow-sm"
         >
-          Continue setup
+          Continue setup →
         </button>
       </div>
     );
   }
 
-  if (view === "settings") return <SettingsPanel onClose={() => setView("chat")} />;
-  if (view === "history") return <HistoryPanel onClose={() => setView("chat")} />;
-  if (view === "workflows")
-    return (
-      <WorkflowPanel
-        onClose={() => setView("chat")}
-        onRunWorkflow={(goal) => { setPendingGoal(goal); setView("chat"); }}
-      />
-    );
+  return (
+    <div className="flex h-full flex-col overflow-hidden">
+      {/* Page content */}
+      <div className="flex-1 overflow-hidden">
+        {view === "chat" && (
+          <ChatScreen
+            activeTabId={activeTabId}
+            pendingGoal={pendingGoal}
+            onPendingGoalConsumed={() => setPendingGoal(null)}
+          />
+        )}
+        {view === "workflows" && (
+          <WorkflowPanel
+            onClose={() => setView("chat")}
+            onRunWorkflow={(goal) => { setPendingGoal(goal); setView("chat"); }}
+          />
+        )}
+        {view === "history" && <HistoryPanel onClose={() => setView("chat")} />}
+        {view === "settings" && <SettingsPanel onClose={() => setView("chat")} />}
+      </div>
+
+      {/* Bottom tab bar */}
+      <BottomNav view={view} onNavigate={setView} />
+    </div>
+  );
+}
+
+function BottomNav({ view, onNavigate }: { view: AppView; onNavigate: (v: AppView) => void }) {
+  const { status } = useChatStore();
+  const isBusy = ["planning", "executing", "recovering", "awaiting_confirmation"].includes(status);
+
+  const tabs: { id: AppView; label: string; icon: React.ReactNode; badge?: React.ReactNode }[] = [
+    {
+      id: "chat",
+      label: "Chat",
+      icon: <IconChat size={16} />,
+      badge: isBusy ? (
+        <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-cosmos-accent animate-pulse-dot ring-1 ring-cosmos-bg" />
+      ) : undefined,
+    },
+    { id: "workflows", label: "Flows", icon: <IconWorkflows size={16} /> },
+    { id: "history", label: "History", icon: <IconHistory size={16} /> },
+    { id: "settings", label: "Settings", icon: <IconSettings size={16} /> },
+  ];
 
   return (
-    <ChatScreen
-      activeTabId={activeTabId}
-      pendingGoal={pendingGoal}
-      onPendingGoalConsumed={() => setPendingGoal(null)}
-      onOpenSettings={() => setView("settings")}
-      onOpenHistory={() => setView("history")}
-      onOpenWorkflows={() => setView("workflows")}
-    />
+    <div className="border-t border-cosmos-border bg-cosmos-bg/95 backdrop-blur-sm px-1 pb-1 pt-1">
+      <div className="flex items-stretch">
+        {tabs.map(({ id, label, icon, badge }) => {
+          const active = view === id;
+          return (
+            <button
+              key={id}
+              onClick={() => onNavigate(id)}
+              className={`relative flex flex-1 flex-col items-center gap-1 rounded-xl px-1 py-2 transition-all duration-150 ${
+                active
+                  ? "text-cosmos-accent"
+                  : "text-cosmos-textMuted hover:text-cosmos-text hover:bg-cosmos-surface"
+              }`}
+            >
+              {/* Active indicator */}
+              {active && (
+                <span className="absolute top-0 left-1/2 h-0.5 w-6 -translate-x-1/2 rounded-full gradient-bg" />
+              )}
+              <span className="relative">
+                {icon}
+                {badge}
+              </span>
+              <span className={`text-2xs font-medium transition-colors ${active ? "text-cosmos-accent" : ""}`}>
+                {label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -94,16 +168,10 @@ function ChatScreen({
   activeTabId,
   pendingGoal,
   onPendingGoalConsumed,
-  onOpenSettings,
-  onOpenHistory,
-  onOpenWorkflows,
 }: {
   activeTabId: number | null;
   pendingGoal: string | null;
   onPendingGoalConsumed: () => void;
-  onOpenSettings: () => void;
-  onOpenHistory: () => void;
-  onOpenWorkflows: () => void;
 }) {
   const {
     messages,
@@ -126,12 +194,12 @@ function ChatScreen({
   } = useChatStore();
 
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const isBusy = ["planning", "executing", "recovering", "awaiting_confirmation"].includes(status);
 
   useEffect(() => {
     connect();
   }, [connect]);
 
-  // Auto-submit a goal queued from the context menu or workflow panel.
   useEffect(() => {
     if (pendingGoal && activeTabId !== null && status === "idle") {
       sendGoal(pendingGoal, activeTabId);
@@ -145,31 +213,37 @@ function ChatScreen({
   };
 
   return (
-    <div className="flex h-full flex-col p-4">
+    <div className="flex h-full flex-col px-4 pb-3 pt-4 animate-fade-in">
       {showShortcuts && <ShortcutsOverlay onClose={() => setShowShortcuts(false)} />}
 
+      {/* Header */}
       <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="text-sm uppercase tracking-[0.2em] text-cosmos-accent">Cosmos</div>
-          {estimatedTokens > 0 && (
-            <span className="rounded bg-cosmos-surface px-1.5 py-0.5 text-[10px] text-cosmos-textMuted">
-              ~{(estimatedTokens / 1000).toFixed(1)}k tokens
-            </span>
-          )}
+        <div className="flex items-center gap-2.5">
+          {/* Logo with optional status ring */}
+          <div className="relative">
+            <div className={`flex h-7 w-7 items-center justify-center rounded-xl gradient-bg transition-shadow duration-300 ${
+              isBusy ? "shadow-glow" : ""
+            }`}>
+              <IconSparkle size={13} className="text-white" />
+            </div>
+            {isBusy && (
+              <span className="absolute inset-0 rounded-xl ring-1 ring-cosmos-accent/40 animate-[cosmos-pulse-ring_2s_ease-in-out_infinite]" />
+            )}
+          </div>
+          <span className="text-sm font-semibold tracking-tight text-cosmos-text">
+            Cosmos
+          </span>
         </div>
-        <div className="flex gap-3">
-          <button onClick={onOpenWorkflows} className="text-xs text-cosmos-textMuted hover:text-cosmos-text">
-            Workflows
-          </button>
-          <button onClick={onOpenHistory} className="text-xs text-cosmos-textMuted hover:text-cosmos-text">
-            History
-          </button>
-          <button onClick={onOpenSettings} className="text-xs text-cosmos-textMuted hover:text-cosmos-text">
-            Settings
-          </button>
-        </div>
+
+        {/* Token badge */}
+        {estimatedTokens > 0 && (
+          <span className="rounded-lg border border-cosmos-border bg-cosmos-surface px-2 py-0.5 text-2xs text-cosmos-textMuted tabular-nums">
+            ~{(estimatedTokens / 1000).toFixed(1)}k tokens
+          </span>
+        )}
       </div>
 
+      {/* Memory + Timeline */}
       <MemoryInsights notes={memoryInsights} variables={extractedVariables} />
       <ExecutionTimeline
         timeline={timeline}
@@ -179,16 +253,23 @@ function ChatScreen({
         onRetryStep={handleRetryStep}
       />
 
+      {/* Error banner */}
       {errorMessage && (
-        <div className="mb-3 rounded-md border border-cosmos-danger/50 bg-cosmos-danger/10 px-2.5 py-1.5 text-xs text-cosmos-danger">
-          {errorMessage}
+        <div className="mb-3 flex items-start gap-2 rounded-xl border border-cosmos-danger/40 bg-cosmos-dangerDim px-3 py-2.5 text-xs text-cosmos-danger animate-slide-up">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="mt-px shrink-0">
+            <circle cx="6" cy="6" r="5.5" stroke="currentColor" strokeWidth="1" />
+            <path d="M6 4v2.5M6 8h.01" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+          </svg>
+          <span className="leading-relaxed">{errorMessage}</span>
         </div>
       )}
 
+      {/* Messages */}
       <div className="flex-1 overflow-y-auto">
         <MessageList messages={messages} />
       </div>
 
+      {/* Input */}
       <ChatInput
         status={status}
         onSend={(goal) => activeTabId !== null && sendGoal(goal, activeTabId)}
