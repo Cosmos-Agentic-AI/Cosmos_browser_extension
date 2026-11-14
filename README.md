@@ -3,7 +3,7 @@
 An AI browser extension that reads pages, plans multi-step tasks, executes
 browser actions, and learns from experience via a layered memory system.
 
-## Status: Milestones 1-9 complete
+## Status: Milestones 1-12 complete
 
 ### Architecture at a glance
 
@@ -131,6 +131,40 @@ src/
     chat/           Zustand store driving the popup off the streaming port
   shared/           Cross-cutting types (messages, settings, memory, dom, actions, chat), utils, styles
 ```
+
+### Milestone 10 — Chrome Side Panel
+
+The popup has been replaced by the Chrome Side Panel API. Clicking the toolbar
+icon (or pressing `Ctrl+Shift+Space` / `Cmd+Shift+Space`) opens Cosmos in a
+persistent side panel that stays open while you browse, giving far more vertical
+space than a 560 px popup.
+
+- `sidepanel/index.html` + `src/sidepanel/main.tsx` — the panel entry point
+  (reuses `App` unchanged).
+- `chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })` is set
+  on install in `background/index.ts`.
+- The old `default_popup` is removed from the manifest; the panel is now the
+  primary surface.
+
+### Milestone 11 — Command History with Quick-Replay
+
+The last six goals you've sent are stored in `localStorage` and shown as
+quick-pick chips in `ChatInput` when you focus the text field. Clicking a chip
+re-sends that goal immediately — no retyping. The list deduplicates and keeps
+the most-recent entry first.
+
+- `pushRecentGoal` / `loadRecentGoals` / `saveRecentGoals` live in
+  `chatStore.ts`, keeping the UI side clean.
+- `ChatInput` now accepts a `recentGoals` prop and renders the chip list above
+  the input row, with a fuzzy filter as you type.
+
+### Milestone 12 — Keyboard Shortcut
+
+`Ctrl+Shift+Space` (macOS: `Cmd+Shift+Space`) opens the Cosmos side panel
+without reaching for the mouse. The shortcut is registered in the manifest as
+`_execute_action` — Chrome's built-in command that simulates clicking the
+extension toolbar button, so it respects the `openPanelOnActionClick` behaviour
+set in Milestone 10 with zero extra code.
 
 ## What's next (beyond the current milestones)
 

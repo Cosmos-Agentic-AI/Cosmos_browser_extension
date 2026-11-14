@@ -9,22 +9,28 @@ export function ChatInput({
   onCancel,
   onRetry,
   canRetry,
+  recentGoals = [],
 }: {
   status: ExecutionStatus;
   onSend: (goal: string) => void;
   onCancel: () => void;
   onRetry: () => void;
   canRetry: boolean;
+  recentGoals?: string[];
 }) {
   const [value, setValue] = useState("");
+  const [showRecent, setShowRecent] = useState(false);
   const busy = BUSY_STATUSES.includes(status);
 
-  const submit = () => {
-    const trimmed = value.trim();
+  const submit = (goal = value) => {
+    const trimmed = goal.trim();
     if (!trimmed || busy) return;
     onSend(trimmed);
     setValue("");
+    setShowRecent(false);
   };
+
+  const visibleRecent = recentGoals.filter((g) => !value || g.toLowerCase().includes(value.toLowerCase()));
 
   return (
     <div className="border-t border-cosmos-border pt-3">
@@ -36,11 +42,28 @@ export function ChatInput({
           Retry last task
         </button>
       )}
+
+      {showRecent && !busy && visibleRecent.length > 0 && (
+        <div className="mb-2 flex flex-col gap-1">
+          {visibleRecent.map((goal) => (
+            <button
+              key={goal}
+              onMouseDown={(e) => { e.preventDefault(); submit(goal); }}
+              className="truncate rounded-md border border-cosmos-border bg-cosmos-surface px-3 py-1.5 text-left text-xs text-cosmos-textMuted hover:border-cosmos-accent hover:text-cosmos-text"
+            >
+              {goal}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="flex items-center gap-2">
         <input
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submit()}
+          onFocus={() => setShowRecent(true)}
+          onBlur={() => setTimeout(() => setShowRecent(false), 150)}
           disabled={busy}
           placeholder={busy ? statusLabel(status) : "What should Cosmos do?"}
           className="flex-1 rounded-lg border border-cosmos-border bg-cosmos-surface px-3 py-2 text-sm outline-none focus:border-cosmos-accent disabled:opacity-60"
@@ -54,7 +77,7 @@ export function ChatInput({
           </button>
         ) : (
           <button
-            onClick={submit}
+            onClick={() => submit()}
             className="rounded-lg bg-cosmos-accent px-3 py-2 text-xs font-medium text-white hover:bg-cosmos-accentMuted"
           >
             Send

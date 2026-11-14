@@ -1,6 +1,31 @@
 import { create } from "zustand";
 import { ChatMessage, ChatStreamEvent, ExecutionStatus, TimelineStep } from "@shared/types/chat";
 
+const RECENT_GOALS_KEY = "cosmos_recent_goals";
+const MAX_RECENT_GOALS = 6;
+
+function loadRecentGoals(): string[] {
+  try {
+    const raw = localStorage.getItem(RECENT_GOALS_KEY);
+    return raw ? (JSON.parse(raw) as string[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentGoals(goals: string[]): void {
+  try {
+    localStorage.setItem(RECENT_GOALS_KEY, JSON.stringify(goals));
+  } catch {
+    // storage quota exceeded — ignore
+  }
+}
+
+function pushRecentGoal(goals: string[], goal: string): string[] {
+  const deduped = goals.filter((g) => g !== goal);
+  return [goal, ...deduped].slice(0, MAX_RECENT_GOALS);
+}
+
 interface ChatState {
   messages: ChatMessage[];
   timeline: TimelineStep[];
@@ -8,6 +33,7 @@ interface ChatState {
   memoryInsights: string[];
   pendingConfirmationStepId: string | null;
   lastGoal: string | null;
+  recentGoals: string[];
   errorMessage: string | null;
 
   port: chrome.runtime.Port | null;
@@ -33,6 +59,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   memoryInsights: [],
   pendingConfirmationStepId: null,
   lastGoal: null,
+  recentGoals: loadRecentGoals(),
   errorMessage: null,
   port: null,
 
@@ -75,14 +102,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   sendGoal: (goal, tabId) => {
-    const { port, messages } = get();
+    const { port, messages, recentGoals } = get();
     if (!port) return;
+    const updated = pushRecentGoal(recentGoals, goal);
+    saveRecentGoals(updated);
     set({
       messages: [...messages, { id: crypto.randomUUID(), role: "user", content: goal, createdAt: Date.now() }],
       timeline: [],
       memoryInsights: [],
       errorMessage: null,
       lastGoal: goal,
+      recentGoals: updated,
       status: "planning",
     });
     port.postMessage({ type: "user_message", goal, tabId });

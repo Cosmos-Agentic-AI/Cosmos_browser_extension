@@ -65,6 +65,7 @@ function ChatScreen({
     confirmStep,
     retryLast,
     lastGoal,
+    recentGoals,
   } = useChatStore();
 
   useEffect(() => {
@@ -103,6 +104,7 @@ function ChatScreen({
         onCancel={cancel}
         onRetry={() => activeTabId !== null && retryLast(activeTabId)}
         canRetry={Boolean(lastGoal)}
+        recentGoals={recentGoals}
       />
     </div>
   );

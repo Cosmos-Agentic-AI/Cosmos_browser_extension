@@ -31,6 +31,7 @@ export default defineConfig({
         background: resolve(__dirname, "src/background/index.ts"),
         content: resolve(__dirname, "src/content/index.ts"),
         popup: resolve(__dirname, "popup/index.html"),
+        sidepanel: resolve(__dirname, "sidepanel/index.html"),
         onboarding: resolve(__dirname, "onboarding/index.html"),
       },
       output: {

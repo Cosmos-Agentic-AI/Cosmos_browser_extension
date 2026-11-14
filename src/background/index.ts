@@ -3,6 +3,9 @@ import { routeMessage } from "./router";
 import { handleChatPort } from "./chatPort";
 
 chrome.runtime.onInstalled.addListener((details) => {
+  // Open side panel on toolbar click instead of a fixed-size popup.
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(console.error);
+
   if (details.reason === "install") {
     chrome.runtime.openOptionsPage();
   }
@@ -11,12 +14,6 @@ chrome.runtime.onInstalled.addListener((details) => {
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name === "cosmos-chat") {
     handleChatPort(port);
-  }
-});
-
-chrome.runtime.onInstalled.addListener((details) => {
-  if (details.reason === "install") {
-    chrome.runtime.openOptionsPage();
   }
 });
 
