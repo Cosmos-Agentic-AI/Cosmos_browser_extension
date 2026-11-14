@@ -7,6 +7,8 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5-blue.svg)](https://www.typescriptlang.org/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
+<!-- Demo GIF — replace this comment with: ![Cosmos demo](demo.gif) once you have a recording -->
+
 ---
 
 ## What is Cosmos?
@@ -147,6 +149,12 @@ The short version:
 2. Fork → create a branch → make your change
 3. `npm run type-check` and `npm run test` must pass
 4. Open a PR against `main` with a clear description of what and why
+
+---
+
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for planned features and `good first issue` items for new contributors.
 
 ---
 
