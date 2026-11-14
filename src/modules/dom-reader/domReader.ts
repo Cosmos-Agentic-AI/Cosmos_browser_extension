@@ -53,7 +53,11 @@ function inViewport(el: Element): boolean {
 
 function describeElement(el: Element): PageElement {
   const id = assignCosmosId(el);
-  const text = (el.textContent ?? "").trim().slice(0, 200) || null;
+  const rawText = (el.textContent ?? "").trim().slice(0, 200) || null;
+  // For icon buttons and SVG-only elements, fall back to ARIA labels so the
+  // LLM has a usable description instead of an empty text field.
+  const ariaLabel = el.getAttribute("aria-label") ?? el.getAttribute("aria-describedby") ?? undefined;
+  const text = rawText || ariaLabel || null;
 
   return {
     cosmosId: id,
@@ -66,7 +70,7 @@ function describeElement(el: Element): PageElement {
       placeholder: el.getAttribute("placeholder") ?? undefined,
       href: el.getAttribute("href") ?? undefined,
       value: (el as HTMLInputElement).value ?? undefined,
-      ariaLabel: el.getAttribute("aria-label") ?? undefined,
+      ariaLabel,
       required: el.hasAttribute("required") || undefined,
       disabled: el.hasAttribute("disabled") || undefined,
     },

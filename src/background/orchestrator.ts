@@ -1,6 +1,7 @@
 import { CosmosSettings } from "@shared/types/settings";
 import { memoryService } from "@modules/memory/memoryService";
-import { createPlan } from "@modules/planner/plannerService";
+import { createPlan, CompletedStep } from "@modules/planner/plannerService";
+import { checkGoalComplete, judgeTaskOutcome } from "@modules/planner/completionDetector";
 import { executeStep, readPageSnapshot } from "@modules/action-executor/actionExecutor";
 import { invokeSpecialistAgent } from "@modules/specialist-agent/specialistAgentService";
 import { shouldUseVision } from "@modules/vision/visionService";
@@ -94,7 +95,10 @@ export async function runTask(
     emit({ kind: "text_chunk", delta: plan.reasoning ? plan.reasoning + "\n\n" : "" });
 
     const failureCounts = new Map<string, ActionResult[]>();
+    const completedSteps: CompletedStep[] = [];
     let overallSuccess = true;
+    let stepIndex = 0;
+    const maxSteps = settings.maxStepsPerTask ?? 15;
 
     for (const step of plan.steps) {
       if (isCancelled()) {
@@ -102,6 +106,16 @@ export async function runTask(
         await memoryService.updateSession(sessionId, { executionState: "idle" });
         return;
       }
+
+      if (stepIndex >= maxSteps) {
+        emit({
+          kind: "text_chunk",
+          delta: `Step budget of ${maxSteps} reached — stopping to avoid runaway execution.\n`,
+        });
+        overallSuccess = false;
+        break;
+      }
+      stepIndex++;
 
       if (step.requiresConfirmation) {
         emit({ kind: "status", status: "awaiting_confirmation" });
@@ -112,6 +126,7 @@ export async function runTask(
           timeline = updateTimeline(timeline, step.id, "skipped");
           emit({ kind: "timeline", timeline });
           emit({ kind: "text_chunk", delta: `Skipped "${step.description}" — not confirmed.\n` });
+          completedSteps.push({ order: step.order, description: step.description, status: "skipped" });
           continue;
         }
       }
@@ -170,6 +185,7 @@ export async function runTask(
       if (!result.ok) {
         overallSuccess = false;
         emit({ kind: "text_chunk", delta: `Step failed: ${step.description} — ${result.error}\n` });
+        completedSteps.push({ order: step.order, description: step.description, status: "failed" });
         await memoryService.recordFailure({
           domain,
           taskSignature: step.description,
@@ -179,6 +195,23 @@ export async function runTask(
       }
 
       emit({ kind: "text_chunk", delta: `Done: ${step.description}\n` });
+      completedSteps.push({ order: step.order, description: step.description, status: "done" });
+
+      // Early completion check — cheap LLM call to detect if goal is already achieved.
+      const freshSnap = await readPageSnapshot(tabId, false);
+      const completion = await checkGoalComplete(settings, goal, freshSnap, completedSteps.length, plan.steps.length);
+      if (completion?.done) {
+        emit({ kind: "memory_insight", note: `Goal achieved early: ${completion.reason}` });
+        overallSuccess = true;
+        break;
+      }
+    }
+
+    // Post-run task judge: compare goal vs final page state.
+    const finalSnapshot = await readPageSnapshot(tabId, false);
+    const verdict = await judgeTaskOutcome(settings, goal, finalSnapshot);
+    if (verdict) {
+      emit({ kind: "memory_insight", note: `Task judge: ${verdict}` });
     }
 
     if (domain) {

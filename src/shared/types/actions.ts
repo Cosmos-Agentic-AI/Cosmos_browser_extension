@@ -19,6 +19,14 @@ export const ActionTypeSchema = z.enum([
   // Guard condition: verifies a natural-language assertion is true before continuing.
   // action.value = the condition to check. Fails the step if false.
   "assert",
+  // Press a keyboard key or chord. action.value = key name, e.g. "Enter", "Escape", "Tab", "ArrowDown".
+  "press_key",
+  // Execute arbitrary JavaScript in the page context. action.value = JS source string.
+  "execute_js",
+  // Hover over an element to trigger hover menus / tooltips.
+  "hover",
+  // Wait for a millisecond duration before continuing. action.value = ms as string.
+  "wait",
 ]);
 export type ActionType = z.infer<typeof ActionTypeSchema>;
 

@@ -57,6 +57,11 @@ export class ApiManagerService {
     return this.persist({ ...settings, defaultModel: model });
   }
 
+  async updateMaxSteps(maxStepsPerTask: number): Promise<CosmosSettings> {
+    const settings = await this.getSettings();
+    return this.persist({ ...settings, maxStepsPerTask: Math.max(1, Math.min(50, maxStepsPerTask)) });
+  }
+
   async updateTheme(theme: CosmosSettings["theme"]): Promise<CosmosSettings> {
     const settings = await this.getSettings();
     return this.persist({ ...settings, theme });

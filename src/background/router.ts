@@ -60,6 +60,11 @@ export async function routeMessage(
       return apiManagerService.updateBlockedDomains(blockedDomains);
     }
 
+    case "SETTINGS_UPDATE_MAX_STEPS": {
+      const { maxStepsPerTask } = message.payload as { maxStepsPerTask: number };
+      return apiManagerService.updateMaxSteps(maxStepsPerTask);
+    }
+
     case "MEMORY_LIST_WORKFLOWS": {
       const { domain } = (message.payload as { domain?: string }) ?? {};
       return memoryService.listWorkflows(domain);

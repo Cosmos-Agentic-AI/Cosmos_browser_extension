@@ -5,6 +5,10 @@ function requireElement(targetId: string | undefined): Element {
   if (!targetId) throw new Error("Action requires a targetId but none was provided.");
   const el = getElementByCosmosId(targetId);
   if (!el) throw new Error(`No element found for cosmosId "${targetId}". Page may have changed — re-read the DOM.`);
+  // Stale-element preflight: verify the element is still attached and has layout.
+  if (!document.contains(el)) {
+    throw new Error(`Element "${targetId}" is detached from the DOM (StaleElement). Re-read the DOM.`);
+  }
   return el;
 }
 
@@ -75,6 +79,27 @@ async function uploadFile(targetId: string | undefined, dataUrl: string | undefi
   dispatchInputEvents(el);
 }
 
+function pressKey(targetId: string | undefined, key: string | undefined) {
+  const target = targetId ? (requireElement(targetId) as HTMLElement) : (document.activeElement as HTMLElement | null) ?? document.body;
+  const k = key ?? "Enter";
+  const init: KeyboardEventInit = { key: k, bubbles: true, cancelable: true };
+  target.dispatchEvent(new KeyboardEvent("keydown", init));
+  target.dispatchEvent(new KeyboardEvent("keypress", init));
+  target.dispatchEvent(new KeyboardEvent("keyup", init));
+}
+
+function hover(targetId: string | undefined) {
+  const el = requireElement(targetId) as HTMLElement;
+  el.scrollIntoView({ block: "center", behavior: "instant" as ScrollBehavior });
+  el.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+  el.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+}
+
+function wait(value: string | undefined): Promise<void> {
+  const ms = Math.min(Number(value ?? "500"), 10000);
+  return new Promise((resolve) => setTimeout(resolve, isNaN(ms) ? 500 : ms));
+}
+
 export async function executeContentAction(action: BrowserAction): Promise<unknown> {
   switch (action.type) {
     case "click":
@@ -92,6 +117,21 @@ export async function executeContentAction(action: BrowserAction): Promise<unkno
     case "upload_file":
       await uploadFile(action.targetId, action.value);
       return { uploaded: action.targetId };
+    case "press_key":
+      pressKey(action.targetId, action.value);
+      return { pressed: action.value };
+    case "hover":
+      hover(action.targetId);
+      return { hovered: action.targetId };
+    case "wait":
+      await wait(action.value);
+      return { waited: action.value };
+    case "execute_js": {
+      if (!action.value) throw new Error("execute_js requires a value (JS source).");
+      // eslint-disable-next-line no-new-func
+      const result = await new Function("return (async () => { " + action.value + " })()")();
+      return { result: JSON.stringify(result) };
+    }
     default:
       throw new Error(`executeContentAction: unsupported action type "${action.type}" for content scope.`);
   }

@@ -23,6 +23,8 @@ export interface CosmosSettings {
   onboardingComplete: boolean;
   /** Domains Cosmos must never act on (checked before each task). */
   blockedDomains: string[];
+  /** Hard cap on plan steps per task. Prevents runaway token spend on ambiguous goals. */
+  maxStepsPerTask: number;
 }
 
 export const DEFAULT_PROVIDERS: Record<ProviderId, ProviderConfig> = {
@@ -58,4 +60,5 @@ export const DEFAULT_SETTINGS: CosmosSettings = {
   theme: "dark",
   onboardingComplete: false,
   blockedDomains: [],
+  maxStepsPerTask: 15,
 };

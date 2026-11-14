@@ -12,7 +12,7 @@ interface ContentResponse<T> {
 
 async function sendToContentScript<T>(
   tabId: number,
-  message: { kind: "DOM_READ" | "EXECUTE_ACTION"; action?: BrowserAction },
+  message: { kind: "DOM_READ" | "EXECUTE_ACTION" | "WAIT_FOR_SETTLE" | "DOM_FINGERPRINT"; action?: BrowserAction; timeoutMs?: number },
 ): Promise<T> {
   const response = (await chrome.tabs.sendMessage(tabId, message)) as ContentResponse<T> | undefined;
   if (!response?.ok) {
@@ -24,7 +24,32 @@ async function sendToContentScript<T>(
   return response.data as T;
 }
 
-export async function readPageSnapshot(tabId: number): Promise<PageSnapshot> {
+/** Returns the page's current state fingerprint (url + visible text + input values). */
+async function getFingerprint(tabId: number): Promise<string> {
+  try {
+    const r = await sendToContentScript<{ fingerprint: string }>(tabId, { kind: "DOM_FINGERPRINT" });
+    return r.fingerprint;
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Actions that are expected to change visible page state.
+ * DOM-diff verification runs after these.
+ */
+const MUTATING_ACTIONS = new Set(["click", "type", "select_option", "press_key", "execute_js"]);
+
+/**
+ * Actions after which the DOM should be allowed to settle before the next read.
+ */
+const SETTLE_AFTER = new Set(["click", "type", "navigate", "press_key", "execute_js", "open_tab"]);
+
+export async function readPageSnapshot(tabId: number, waitForSettle = true): Promise<PageSnapshot> {
+  if (waitForSettle) {
+    // Allow any pending SPA re-renders to finish before snapshotting.
+    await sendToContentScript(tabId, { kind: "WAIT_FOR_SETTLE", timeoutMs: 2000 }).catch(() => {});
+  }
   return sendToContentScript<PageSnapshot>(tabId, { kind: "DOM_READ" });
 }
 
@@ -58,7 +83,29 @@ export async function executeStep(
     } else if (TAB_SCOPED_ACTION_TYPES.has(step.action.type)) {
       output = await executeTabAction(step.action, tabId);
     } else {
+      // For mutating actions capture a before-fingerprint to detect no-op actions.
+      const shouldVerify = MUTATING_ACTIONS.has(step.action.type);
+      const before = shouldVerify ? await getFingerprint(tabId) : "";
+
       output = await sendToContentScript(tabId, { kind: "EXECUTE_ACTION", action: step.action });
+
+      // Wait for SPA re-render after actions that trigger DOM mutations.
+      if (SETTLE_AFTER.has(step.action.type)) {
+        await sendToContentScript(tabId, { kind: "WAIT_FOR_SETTLE" }).catch(() => {});
+      }
+
+      // Verify the page actually changed (catches clicks on disabled/no-op elements).
+      if (shouldVerify) {
+        const after = await getFingerprint(tabId);
+        if (after !== "" && before !== "" && after === before) {
+          return {
+            stepId: step.id,
+            ok: false,
+            error: "Page state unchanged after action — element may be disabled or the action did not register.",
+            durationMs: Date.now() - start,
+          };
+        }
+      }
     }
 
     return { stepId: step.id, ok: true, output, durationMs: Date.now() - start };

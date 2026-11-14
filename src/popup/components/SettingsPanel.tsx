@@ -69,6 +69,17 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     applyTheme(theme);
   };
 
+  const saveMaxSteps = async (value: string) => {
+    const n = parseInt(value, 10);
+    if (!Number.isFinite(n)) return;
+    const updated = await sendToRouter<{ maxStepsPerTask: number }, CosmosSettings>(
+      "SETTINGS_UPDATE_MAX_STEPS",
+      { maxStepsPerTask: n },
+      "popup",
+    );
+    setSettings(updated);
+  };
+
   const saveBlockedDomains = async (raw: string) => {
     const blockedDomains = raw
       .split(/[\n,]+/)
@@ -190,6 +201,22 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="mb-5">
+        <div className="mb-2 text-xs uppercase tracking-wide text-cosmos-textMuted">Max steps per task</div>
+        <input
+          type="number"
+          key={settings.maxStepsPerTask}
+          defaultValue={settings.maxStepsPerTask}
+          min={1}
+          max={50}
+          onBlur={(e) => saveMaxSteps(e.target.value)}
+          className="w-24 rounded border border-cosmos-border bg-cosmos-surface px-2 py-1.5 text-xs outline-none focus:border-cosmos-accent"
+        />
+        <p className="mt-1 text-xs text-cosmos-textMuted">
+          Hard cap on plan steps (1–50). Prevents runaway token spend on ambiguous goals.
+        </p>
       </div>
 
       <div className="mb-5">

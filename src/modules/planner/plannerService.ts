@@ -4,12 +4,20 @@ import { Plan, PlanSchema } from "@shared/types/actions";
 import { PageSnapshot } from "@shared/types/dom";
 import { FailureMemory, WebsiteMemory, WorkflowMemory } from "@shared/types/memory";
 
+export interface CompletedStep {
+  order: number;
+  description: string;
+  status: "done" | "skipped" | "failed";
+}
+
 export interface PlannerContext {
   goal: string;
   snapshot: PageSnapshot;
   websiteMemory: WebsiteMemory | null;
   matchingWorkflow: WorkflowMemory | null;
   relevantFailures: FailureMemory[];
+  /** Steps already completed in a prior partial execution (for re-plans or context). */
+  completedSteps?: CompletedStep[];
 }
 
 const SYSTEM_PROMPT = `You are the Planner module of Cosmos, an autonomous browser assistant.
@@ -47,18 +55,15 @@ function buildUserPrompt(ctx: PlannerContext): string {
   const parts: string[] = [];
   parts.push(`Goal: ${ctx.goal}`);
   parts.push(`Current page: ${ctx.snapshot.title} (${ctx.snapshot.url})`);
-  parts.push(
-    `Interactive elements (cosmosId: role "text"): ${JSON.stringify(
-      ctx.snapshot.interactiveElements.slice(0, 80).map((e) => ({
-        cosmosId: e.cosmosId,
-        role: e.role,
-        text: e.text,
-        name: e.attributes.name,
-        placeholder: e.attributes.placeholder,
-        href: e.attributes.href,
-      })),
-    )}`,
-  );
+
+  // Viewport-priority ordering (SeeAct): in-viewport elements first, below-fold after.
+  const inView = ctx.snapshot.interactiveElements.filter((e) => e.inViewport).slice(0, 50);
+  const belowFold = ctx.snapshot.interactiveElements.filter((e) => !e.inViewport).slice(0, 20);
+  const allElements = [
+    ...inView.map((e) => ({ cosmosId: e.cosmosId, role: e.role, text: e.text, name: e.attributes.name, placeholder: e.attributes.placeholder, href: e.attributes.href })),
+    ...belowFold.map((e) => ({ cosmosId: e.cosmosId, role: e.role, text: e.text, name: e.attributes.name, placeholder: e.attributes.placeholder, href: e.attributes.href, belowFold: true })),
+  ];
+  parts.push(`Interactive elements (cosmosId: role "text", belowFold=true means off-screen): ${JSON.stringify(allElements)}`);
 
   if (ctx.snapshot.forms.length > 0) {
     parts.push(`Forms on page: ${ctx.snapshot.forms.length}`);
@@ -86,6 +91,12 @@ function buildUserPrompt(ctx: PlannerContext): string {
       `Past failures to avoid repeating: ${JSON.stringify(
         ctx.relevantFailures.map((f) => ({ cause: f.cause, recoveryStrategy: f.recoveryStrategy })),
       )}`,
+    );
+  }
+
+  if (ctx.completedSteps && ctx.completedSteps.length > 0) {
+    parts.push(
+      `Steps already completed (do NOT re-plan these): ${JSON.stringify(ctx.completedSteps)}`,
     );
   }
 
